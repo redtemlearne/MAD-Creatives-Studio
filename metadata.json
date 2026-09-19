@@ -1,0 +1,6 @@
+{
+  "name": "MAD Creatives Studio",
+  "description": "Phase 0 mobile UI/UX foundation and application shell for MAD Creatives Studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

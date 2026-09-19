@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Camera slate / Studio frame container -->
+    <path
+        android:fillColor="#FF5533"
+        android:pathData="M32,30 H76 A6,6 0 0,1 82,36 V72 A6,6 0 0,1 76,78 H32 A6,6 0 0,1 26,72 V36 A6,6 0 0,1 32,30 Z" />
+    <!-- Slate inner viewport (dark cut) -->
+    <path
+        android:fillColor="#121316"
+        android:pathData="M31,44 H77 V71 A3,3 0 0,1 74,74 H34 A3,3 0 0,1 31,71 Z" />
+    <!-- Studio Play glyph -->
+    <path
+        android:fillColor="#FF5533"
+        android:pathData="M48,51 L62,59 L48,67 Z" />
+    <!-- Top slate chevron cuts -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,32 L42,32 L38,42 L32,42 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,32 L56,32 L52,42 L46,42 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,32 L70,32 L66,42 L60,42 Z" />
+</vector>
