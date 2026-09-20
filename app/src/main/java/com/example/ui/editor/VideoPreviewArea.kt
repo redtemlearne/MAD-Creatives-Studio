@@ -37,9 +37,8 @@ fun VideoPreviewArea(
 ) {
     Box(
         modifier = modifier
-            .fillMaxWidth()
             .padding(horizontal = StudioSpacing.lg)
-            .aspectRatio(16f / 9f)
+            .aspectRatio(9f / 16f)
             .clip(RoundedCornerShape(StudioRadius.md))
             .border(1.dp, StudioBorder, RoundedCornerShape(StudioRadius.md))
             .background(StudioSurfacePrimary)

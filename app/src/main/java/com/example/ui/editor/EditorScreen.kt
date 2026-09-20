@@ -3,7 +3,6 @@ package com.example.ui.editor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,10 +23,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.model.Project
-import com.example.ui.components.Phase1NoticeDialog
-import com.example.ui.components.RenameProjectDialog
+import com.example.ui.components.Phase1NoticeBottomSheet
+import com.example.ui.components.RenameProjectBottomSheet
 import com.example.ui.theme.StudioBackground
 import com.example.ui.theme.StudioSpacing
+import com.example.util.LocalWindowWidthSizeClass
+import com.example.util.isWide
 
 @Composable
 fun EditorScreen(
@@ -37,23 +37,24 @@ fun EditorScreen(
     onRenameProject: (newName: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showRenameDialog by remember { mutableStateOf(false) }
-    var showPhase1NoticeDialog by remember { mutableStateOf(false) }
+    var showRenameSheet by remember { mutableStateOf(false) }
+    var showPhase1NoticeSheet by remember { mutableStateOf(false) }
+    val isWideLayout = LocalWindowWidthSizeClass.current.isWide()
 
-    if (showRenameDialog) {
-        RenameProjectDialog(
+    if (showRenameSheet) {
+        RenameProjectBottomSheet(
             currentName = project.name,
-            onDismiss = { showRenameDialog = false },
+            onDismiss = { showRenameSheet = false },
             onRenameConfirm = { newName ->
-                showRenameDialog = false
+                showRenameSheet = false
                 onRenameProject(newName)
             }
         )
     }
 
-    if (showPhase1NoticeDialog) {
-        Phase1NoticeDialog(
-            onDismiss = { showPhase1NoticeDialog = false }
+    if (showPhase1NoticeSheet) {
+        Phase1NoticeBottomSheet(
+            onDismiss = { showPhase1NoticeSheet = false }
         )
     }
 
@@ -67,36 +68,36 @@ fun EditorScreen(
             EditorTopBar(
                 projectName = project.name,
                 onBackClick = onBackClick,
-                onRenameClick = { showRenameDialog = true }
+                onRenameClick = { showRenameSheet = true }
             )
-        },
-        bottomBar = {
-            // In wide mode, we place bottom bar in right column; in standard mode, we keep bottomBar here
         }
     ) { innerPadding ->
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            val isWideLayout = maxWidth >= 600.dp
-
             if (isWideLayout) {
-                // Wide / Landscape Layout: Preview on Left, Timeline on Right
+                // Wide / Tablet Layout: Preview on Left, Timeline & Controls on Right
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(StudioSpacing.md),
                     horizontalArrangement = Arrangement.spacedBy(StudioSpacing.md)
                 ) {
-                    // Left Column: Video Preview + Playback Bar
+                    // Left Column: 9:16 Video Preview + Playback Bar
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        VideoPreviewArea(modifier = Modifier.fillMaxWidth())
+                        VideoPreviewArea(
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .fillMaxHeight(0.85f)
+                        )
                         Spacer(modifier = Modifier.height(StudioSpacing.sm))
                         PlaybackBar(modifier = Modifier.fillMaxWidth())
                     }
@@ -109,7 +110,7 @@ fun EditorScreen(
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         TimelineEmptyState(
-                            onAddMediaClick = { showPhase1NoticeDialog = true },
+                            onAddMediaClick = { showPhase1NoticeSheet = true },
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
@@ -118,8 +119,8 @@ fun EditorScreen(
                         Spacer(modifier = Modifier.height(StudioSpacing.sm))
 
                         EditorBottomBar(
-                            onAddMediaClick = { showPhase1NoticeDialog = true },
-                            onMoreClick = { showPhase1NoticeDialog = true }
+                            onAddMediaClick = { showPhase1NoticeSheet = true },
+                            onMoreClick = { showPhase1NoticeSheet = true }
                         )
                     }
                 }
@@ -135,12 +136,16 @@ fun EditorScreen(
                             .weight(1f)
                     ) {
                         Spacer(modifier = Modifier.height(StudioSpacing.xs))
-                        VideoPreviewArea(modifier = Modifier.fillMaxWidth())
+                        VideoPreviewArea(
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .align(Alignment.CenterHorizontally)
+                        )
                         Spacer(modifier = Modifier.height(StudioSpacing.xs))
                         PlaybackBar(modifier = Modifier.fillMaxWidth())
                         Spacer(modifier = Modifier.height(StudioSpacing.xs))
                         TimelineEmptyState(
-                            onAddMediaClick = { showPhase1NoticeDialog = true },
+                            onAddMediaClick = { showPhase1NoticeSheet = true },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
@@ -149,8 +154,8 @@ fun EditorScreen(
                     }
 
                     EditorBottomBar(
-                        onAddMediaClick = { showPhase1NoticeDialog = true },
-                        onMoreClick = { showPhase1NoticeDialog = true }
+                        onAddMediaClick = { showPhase1NoticeSheet = true },
+                        onMoreClick = { showPhase1NoticeSheet = true }
                     )
                 }
             }

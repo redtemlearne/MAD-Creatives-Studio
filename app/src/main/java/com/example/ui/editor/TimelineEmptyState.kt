@@ -5,7 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,15 +28,11 @@ import com.example.ui.components.StudioPrimaryButton
 import com.example.ui.theme.StudioAccent
 import com.example.ui.theme.StudioAccentMuted
 import com.example.ui.theme.StudioBorder
-import com.example.ui.theme.StudioBorderSubtle
 import com.example.ui.theme.StudioRadius
 import com.example.ui.theme.StudioSpacing
-import com.example.ui.theme.StudioSurfaceElevated
 import com.example.ui.theme.StudioSurfacePrimary
-import com.example.ui.theme.StudioSurfaceSecondary
 import com.example.ui.theme.StudioTextMuted
 import com.example.ui.theme.StudioTextPrimary
-import com.example.ui.theme.StudioTextSecondary
 import com.example.ui.theme.StudioTypography
 
 @Composable
@@ -52,98 +47,57 @@ fun TimelineEmptyState(
             .clip(RoundedCornerShape(StudioRadius.md))
             .border(1.dp, StudioBorder, RoundedCornerShape(StudioRadius.md))
             .background(StudioSurfacePrimary)
-            .testTag("timeline_container")
+            .testTag("timeline_container"),
+        contentAlignment = Alignment.Center
     ) {
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(StudioSpacing.lg),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            // Timeline Time Ruler Header (Minimal structural foundation)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(28.dp)
-                    .background(StudioSurfaceSecondary)
-                    .border(
-                        width = 1.dp,
-                        color = StudioBorderSubtle,
-                        shape = RoundedCornerShape(topStart = StudioRadius.md, topEnd = StudioRadius.md)
-                    )
-                    .padding(horizontal = StudioSpacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "00:00",
-                    style = StudioTypography.labelSmall,
-                    color = StudioTextMuted
-                )
-                Text(
-                    text = "TIMELINE",
-                    style = StudioTypography.labelSmall,
-                    color = StudioTextMuted
-                )
-                Text(
-                    text = "00:30",
-                    style = StudioTypography.labelSmall,
-                    color = StudioTextMuted
-                )
-            }
-
-            // Empty State Body
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(StudioSpacing.lg),
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(StudioRadius.sm))
+                    .background(StudioAccentMuted),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(StudioRadius.sm))
-                            .background(StudioAccentMuted),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ViewTimeline,
-                            contentDescription = null,
-                            tint = StudioAccent,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(StudioSpacing.md))
-
-                    Text(
-                        text = "Your timeline is empty",
-                        style = StudioTypography.titleMedium,
-                        color = StudioTextPrimary,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(StudioSpacing.xxs))
-
-                    Text(
-                        text = "Media tracks will be created when media is added",
-                        style = StudioTypography.bodyMedium,
-                        color = StudioTextMuted,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(StudioSpacing.lg))
-
-                    StudioPrimaryButton(
-                        text = "Add Media",
-                        icon = Icons.Default.Add,
-                        onClick = onAddMediaClick,
-                        modifier = Modifier.testTag("timeline_add_media_button")
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.ViewTimeline,
+                    contentDescription = null,
+                    tint = StudioAccent,
+                    modifier = Modifier.size(22.dp)
+                )
             }
+
+            Spacer(modifier = Modifier.height(StudioSpacing.md))
+
+            Text(
+                text = "Your timeline is empty",
+                style = StudioTypography.titleMedium,
+                color = StudioTextPrimary,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(StudioSpacing.xxs))
+
+            Text(
+                text = "Media tracks will be created when media is added",
+                style = StudioTypography.bodyMedium,
+                color = StudioTextMuted,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(StudioSpacing.lg))
+
+            StudioPrimaryButton(
+                text = "Add Media",
+                icon = Icons.Default.Add,
+                onClick = onAddMediaClick,
+                modifier = Modifier.testTag("timeline_add_media_button")
+            )
         }
     }
 }

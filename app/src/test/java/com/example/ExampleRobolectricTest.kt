@@ -9,10 +9,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.example.state.ProjectSessionManager
-import com.example.ui.theme.MADCreativesTheme
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -48,7 +46,7 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify home screen empty state and new project dialog`() {
+    fun `verify home screen empty state and new project bottom sheet`() {
         composeTestRule.setContent {
             MADCreativesStudioApp()
         }
@@ -57,11 +55,13 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithText("MAD Creatives Studio").assertIsDisplayed()
         composeTestRule.onNodeWithText("No projects yet").assertIsDisplayed()
         composeTestRule.onNodeWithTag("empty_state_new_project_button").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_settings_button").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_rotate_button").assertDoesNotExist()
 
         // Tap New Project button
         composeTestRule.onNodeWithTag("empty_state_new_project_button").performClick()
 
-        // Dialog should be displayed with project name input
+        // Bottom sheet should be displayed with project name input
         composeTestRule.onNodeWithTag("project_name_input").assertIsDisplayed()
         composeTestRule.onNodeWithTag("create_project_confirm_button").assertIsDisplayed()
 
@@ -70,12 +70,15 @@ class ExampleRobolectricTest {
 
         // Should now be inside the Editor shell
         composeTestRule.onNodeWithTag("editor_back_button").assertExists()
+        composeTestRule.onNodeWithTag("editor_rotate_button").assertDoesNotExist()
         composeTestRule.onNodeWithTag("video_preview_area").assertExists()
         composeTestRule.onNodeWithTag("playback_bar").assertExists()
+        composeTestRule.onNodeWithTag("playback_timecode").assertExists()
+        composeTestRule.onNodeWithTag("inactive_play_button").assertExists()
         composeTestRule.onNodeWithTag("timeline_container").assertExists()
         composeTestRule.onNodeWithText("Your timeline is empty").assertExists()
 
-        // Tapping Add Media should show Phase 1 Notice
+        // Tapping Add Media should show Phase 1 Notice BottomSheet
         composeTestRule.onNodeWithTag("timeline_add_media_button").performClick()
         composeTestRule.onNodeWithText("Media import is coming in Phase 1.").assertExists()
         composeTestRule.onNodeWithTag("close_phase1_dialog_button").performClick()
@@ -83,27 +86,34 @@ class ExampleRobolectricTest {
         // Go back to Home
         composeTestRule.onNodeWithTag("editor_back_button").performClick()
         composeTestRule.onNodeWithText("My Projects").assertExists()
+
+        // When project list is non-empty, only FAB is shown (no duplicate header button)
+        composeTestRule.onNodeWithTag("new_project_fab").assertExists()
+        composeTestRule.onNodeWithTag("header_new_project_button").assertDoesNotExist()
     }
 
     @Test
-    fun `verify screen rotation controls on home and editor screens`() {
+    fun `verify editor more menu bottom sheet has only rename action`() {
         composeTestRule.setContent {
             MADCreativesStudioApp()
         }
 
-        // Verify rotation button is accessible on Home top bar
-        composeTestRule.onNodeWithTag("home_rotate_button").assertExists().assertIsDisplayed()
-
-        // Create a project to enter Editor screen
+        // Create project
         composeTestRule.onNodeWithTag("empty_state_new_project_button").performClick()
         composeTestRule.onNodeWithTag("create_project_confirm_button").performClick()
 
-        // Verify rotation button is accessible on Editor top bar
-        composeTestRule.onNodeWithTag("editor_rotate_button").assertExists().assertIsDisplayed()
-
-        // Verify more menu has rotation options
+        // Open More options bottom sheet
         composeTestRule.onNodeWithTag("editor_more_button").performClick()
-        composeTestRule.onNodeWithTag("toggle_orientation_menu_item").assertExists()
-        composeTestRule.onNodeWithTag("sensor_orientation_menu_item").assertExists()
+
+        // Only Rename should exist; rotation items should not exist
+        composeTestRule.onNodeWithTag("rename_menu_item").assertExists()
+        composeTestRule.onNodeWithTag("toggle_orientation_menu_item").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("sensor_orientation_menu_item").assertDoesNotExist()
+
+        // Clicking Rename opens rename bottom sheet
+        composeTestRule.onNodeWithTag("rename_menu_item").performClick()
+        composeTestRule.onNodeWithTag("rename_input").assertExists()
+        composeTestRule.onNodeWithTag("rename_confirm_button").assertExists()
+        composeTestRule.onNodeWithTag("cancel_rename_button").performClick()
     }
 }
