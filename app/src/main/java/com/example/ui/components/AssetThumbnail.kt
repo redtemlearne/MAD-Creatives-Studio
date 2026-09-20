@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.media.ThumbnailManager
+import com.example.model.Availability
 import com.example.ui.theme.StudioRadius
 import com.example.ui.theme.StudioSpacing
 import com.example.ui.theme.StudioSurfaceSecondary
@@ -36,9 +37,11 @@ fun AssetThumbnail(
     assetId: String,
     sourceUri: String,
     modifier: Modifier = Modifier,
-    isAvailable: Boolean = true,
+    availability: Availability = Availability.Available,
+    isAvailable: Boolean = availability != Availability.Unavailable,
     contentScale: ContentScale = ContentScale.Crop
 ) {
+    val isUnavailable = availability == Availability.Unavailable || !isAvailable
     val context = LocalContext.current
     val bitmapState = produceState<Bitmap?>(initialValue = null, key1 = assetId) {
         value = ThumbnailManager.getThumbnail(context, assetId, sourceUri)
@@ -58,7 +61,7 @@ fun AssetThumbnail(
                 contentScale = contentScale,
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (!isAvailable) Modifier.alpha(0.38f) else Modifier)
+                    .then(if (isUnavailable) Modifier.alpha(0.38f) else Modifier)
             )
         } else {
             Icon(
@@ -67,11 +70,11 @@ fun AssetThumbnail(
                 tint = StudioTextMuted,
                 modifier = Modifier
                     .size(24.dp)
-                    .then(if (!isAvailable) Modifier.alpha(0.38f) else Modifier)
+                    .then(if (isUnavailable) Modifier.alpha(0.38f) else Modifier)
             )
         }
 
-        if (!isAvailable) {
+        if (isUnavailable) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

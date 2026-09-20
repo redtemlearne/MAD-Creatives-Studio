@@ -50,6 +50,7 @@ fun AppNavigation(
             is Screen.Home -> {
                 HomeScreen(
                     projects = homeUiState.projects,
+                    isLoading = homeUiState.isLoading,
                     onOpenProject = { projectId ->
                         currentScreenRoute = "editor:$projectId"
                     },
@@ -69,14 +70,14 @@ fun AppNavigation(
                     currentScreenRoute = "home"
                 }
 
-                val context = LocalContext.current
                 val editorViewModel: EditorViewModel = viewModel(
                     key = "editor_${screen.projectId}",
                     factory = EditorViewModel.provideFactory(
                         projectId = screen.projectId,
                         projectRepository = appContainer.projectRepository,
                         mediaRepository = appContainer.mediaRepository,
-                        context = context.applicationContext
+                        mediaImporter = appContainer.mediaImporter,
+                        uriAvailabilityChecker = appContainer.uriAvailabilityChecker
                     )
                 )
 

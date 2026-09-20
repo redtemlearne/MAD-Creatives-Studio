@@ -1,5 +1,11 @@
 package com.example.model
 
+enum class Availability {
+    Unknown,
+    Available,
+    Unavailable
+}
+
 data class MediaAsset(
     val id: String,
     val projectId: String,
@@ -12,5 +18,7 @@ data class MediaAsset(
     val height: Int,
     val rotationDegrees: Int,
     val addedAt: Long,
-    val isAvailable: Boolean = true
-)
+    val availability: Availability = Availability.Unknown
+) {
+    val isAvailable: Boolean get() = availability == Availability.Available
+}

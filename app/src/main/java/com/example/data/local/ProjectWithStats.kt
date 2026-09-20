@@ -7,5 +7,6 @@ data class ProjectWithStats(
     val updatedAt: Long,
     val aspectRatio: String,
     val clipCount: Int,
-    val firstAssetId: String?
+    val firstAssetId: String?,
+    val firstAssetSourceUri: String?
 )

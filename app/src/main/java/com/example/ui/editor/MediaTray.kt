@@ -3,17 +3,19 @@ package com.example.ui.editor
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -21,8 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,8 +36,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.Availability
 import com.example.model.MediaAsset
 import com.example.ui.components.AssetThumbnail
 import com.example.ui.components.RemoveMediaBottomSheet
@@ -45,6 +50,7 @@ import com.example.ui.theme.StudioRadius
 import com.example.ui.theme.StudioSpacing
 import com.example.ui.theme.StudioSurfaceElevated
 import com.example.ui.theme.StudioSurfacePrimary
+import com.example.ui.theme.StudioTextPrimary
 import com.example.ui.theme.StudioTypography
 
 @Composable
@@ -53,7 +59,8 @@ fun MediaTray(
     selectedAssetId: String?,
     onSelectAsset: (String) -> Unit,
     onRemoveAsset: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    importProgress: ImportProgress? = null
 ) {
     var assetToRemove by remember { mutableStateOf<MediaAsset?>(null) }
 
@@ -89,6 +96,15 @@ fun MediaTray(
                     }
                 )
             }
+
+            if (importProgress != null) {
+                item(key = "import_progress_tile") {
+                    ImportProgressTile(
+                        current = importProgress.current,
+                        total = importProgress.total
+                    )
+                }
+            }
         }
     }
 
@@ -114,11 +130,22 @@ fun MediaTrayTile(
     onOverflowClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Calculate aspect ratio from video dimensions, clamped to reasonable bounds
     val videoAspect = if (asset.width > 0 && asset.height > 0) {
         (asset.width.toFloat() / asset.height.toFloat()).coerceIn(0.45f, 2.2f)
     } else {
         9f / 16f
+    }
+    val tileWidth = (96.dp * videoAspect).coerceIn(72.dp, 168.dp)
+
+    val durationText = formatDuration(asset.durationMs)
+    val tileSemanticsDescription = buildString {
+        append("${asset.displayName}, $durationText")
+        if (isSelected) {
+            append(", selected")
+        }
+        if (asset.availability == Availability.Unavailable) {
+            append(", unavailable")
+        }
     }
 
     val borderModifier = if (isSelected) {
@@ -129,32 +156,37 @@ fun MediaTrayTile(
 
     Box(
         modifier = modifier
-            .height(84.dp)
-            .aspectRatio(videoAspect)
+            .height(96.dp)
+            .width(tileWidth)
             .clip(RoundedCornerShape(StudioRadius.sm))
             .then(borderModifier)
             .background(StudioSurfaceElevated)
             .combinedClickable(
                 onClick = onSelect,
-                onLongClick = onLongClick
+                onLongClick = onLongClick,
+                onClickLabel = "Preview",
+                onLongClickLabel = "Remove from project"
             )
+            .semantics(mergeDescendants = true) {
+                contentDescription = tileSemanticsDescription
+            }
             .testTag("media_tray_tile_${asset.id}")
     ) {
         // Real thumbnail
         AssetThumbnail(
             assetId = asset.id,
             sourceUri = asset.sourceUri,
-            isAvailable = asset.isAvailable,
+            availability = asset.availability,
             modifier = Modifier.fillMaxSize()
         )
 
-        // Selected indicator (top right): checkmark badge AND label
+        // Selected check badge at top-start
         if (isSelected) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
+                    .align(Alignment.TopStart)
                     .padding(StudioSpacing.xxs)
-                    .size(20.dp)
+                    .size(24.dp)
                     .clip(CircleShape)
                     .background(StudioAccent)
                     .testTag("selected_check_badge"),
@@ -162,9 +194,9 @@ fun MediaTrayTile(
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
+                    contentDescription = null,
                     tint = Color.Black,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
@@ -178,26 +210,67 @@ fun MediaTrayTile(
                 .padding(horizontal = 4.dp, vertical = 2.dp)
         ) {
             Text(
-                text = formatDuration(asset.durationMs),
+                text = durationText,
                 style = StudioTypography.labelSmall.copy(fontSize = 10.sp),
                 color = Color.White
             )
         }
 
-        // Overflow icon (top left) for easy accessibility / touch removal
-        IconButton(
-            onClick = onOverflowClick,
+        // Real 48dp x 48dp overflow control (20dp icon) at top-end corner
+        Box(
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .size(32.dp)
-                .padding(2.dp)
-                .testTag("tile_overflow_${asset.id}")
+                .align(Alignment.TopEnd)
+                .size(48.dp)
+                .clickable(
+                    onClick = onOverflowClick,
+                    onClickLabel = "Options"
+                )
+                .testTag("tile_overflow_${asset.id}"),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "Options",
-                tint = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.size(16.dp)
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun ImportProgressTile(
+    current: Int,
+    total: Int,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .height(96.dp)
+            .width(84.dp)
+            .clip(RoundedCornerShape(StudioRadius.sm))
+            .border(1.dp, StudioBorder, RoundedCornerShape(StudioRadius.sm))
+            .background(StudioSurfaceElevated)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "Importing video $current of $total"
+            }
+            .testTag("import_progress_tile"),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = StudioAccent,
+                strokeWidth = 2.dp
+            )
+            Spacer(modifier = Modifier.height(StudioSpacing.xs))
+            Text(
+                text = "$current of $total",
+                style = StudioTypography.labelSmall.copy(fontSize = 11.sp),
+                color = StudioTextPrimary
             )
         }
     }

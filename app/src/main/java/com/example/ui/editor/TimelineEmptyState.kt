@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ViewTimeline
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.StudioPrimaryButton
@@ -38,7 +41,9 @@ import com.example.ui.theme.StudioTypography
 @Composable
 fun TimelineEmptyState(
     onAddMediaClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    importProgress: ImportProgress? = null,
+    isAddMediaEnabled: Boolean = true
 ) {
     Box(
         modifier = modifier
@@ -57,38 +62,74 @@ fun TimelineEmptyState(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(StudioRadius.sm))
-                    .background(StudioAccentMuted),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ViewTimeline,
-                    contentDescription = null,
-                    tint = StudioAccent,
-                    modifier = Modifier.size(22.dp)
+            if (importProgress != null) {
+                // Showing import progress inside empty state
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.semantics(mergeDescendants = true) {
+                        contentDescription = "Importing video ${importProgress.current} of ${importProgress.total}"
+                    }
+                ) {
+                    CircularProgressIndicator(
+                        color = StudioAccent,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("timeline_import_progress")
+                    )
+
+                    Spacer(modifier = Modifier.height(StudioSpacing.md))
+
+                    Text(
+                        text = "${importProgress.current} of ${importProgress.total}",
+                        style = StudioTypography.titleMedium,
+                        color = StudioTextPrimary,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(StudioSpacing.xxs))
+
+                    Text(
+                        text = "Importing media...",
+                        style = StudioTypography.bodyMedium,
+                        color = StudioTextMuted,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(StudioRadius.sm))
+                        .background(StudioAccentMuted),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ViewTimeline,
+                        contentDescription = null,
+                        tint = StudioAccent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(StudioSpacing.md))
+
+                Text(
+                    text = "Your timeline is empty",
+                    style = StudioTypography.titleMedium,
+                    color = StudioTextPrimary,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(StudioSpacing.xxs))
+
+                Text(
+                    text = "Media tracks will be created when media is added",
+                    style = StudioTypography.bodyMedium,
+                    color = StudioTextMuted,
+                    textAlign = TextAlign.Center
                 )
             }
-
-            Spacer(modifier = Modifier.height(StudioSpacing.md))
-
-            Text(
-                text = "Your timeline is empty",
-                style = StudioTypography.titleMedium,
-                color = StudioTextPrimary,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(StudioSpacing.xxs))
-
-            Text(
-                text = "Media tracks will be created when media is added",
-                style = StudioTypography.bodyMedium,
-                color = StudioTextMuted,
-                textAlign = TextAlign.Center
-            )
 
             Spacer(modifier = Modifier.height(StudioSpacing.lg))
 
@@ -96,6 +137,7 @@ fun TimelineEmptyState(
                 text = "Add Media",
                 icon = Icons.Default.Add,
                 onClick = onAddMediaClick,
+                enabled = isAddMediaEnabled && importProgress == null,
                 modifier = Modifier.testTag("timeline_add_media_button")
             )
         }

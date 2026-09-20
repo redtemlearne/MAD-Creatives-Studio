@@ -5,6 +5,7 @@ import com.example.data.local.MediaAssetDao
 import com.example.data.local.MediaAssetEntity
 import com.example.data.local.ProjectDao
 import com.example.data.media.UriPermissionHelper
+import com.example.model.Availability
 import com.example.model.MediaAsset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -33,7 +34,7 @@ class RoomMediaRepository(
                     height = entity.height,
                     rotationDegrees = entity.rotationDegrees,
                     addedAt = entity.addedAt,
-                    isAvailable = true // Runtime availability set by ViewModel
+                    availability = Availability.Unknown // Runtime availability set by ViewModel
                 )
             }
         }
@@ -53,7 +54,7 @@ class RoomMediaRepository(
                 height = entity.height,
                 rotationDegrees = entity.rotationDegrees,
                 addedAt = entity.addedAt,
-                isAvailable = true
+                availability = Availability.Unknown
             )
         }
     }

@@ -41,6 +41,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.example.model.Availability
 import com.example.ui.components.RenameProjectBottomSheet
 import com.example.ui.theme.StudioAccent
 import com.example.ui.theme.StudioBackground
@@ -64,12 +65,14 @@ fun EditorScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    val isAddMediaEnabled = !uiState.isImporting
+
     // Media file picker launcher
     val openMediaLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
-        if (uris.isNotEmpty()) {
-            viewModel.importVideos(uris)
+        if (uris.isNotEmpty() && isAddMediaEnabled) {
+            viewModel.importVideos(uris.map { it.toString() })
         }
     }
 
@@ -178,12 +181,15 @@ fun EditorScreen(
         }
     }
 
-    // Load selected asset into player paused at 0
+    // Load selected asset into player keyed on (asset id, availability)
     val selectedAsset = uiState.selectedAsset
-    LaunchedEffect(selectedAsset?.id) {
+    val assetId = selectedAsset?.id
+    val assetAvailability = selectedAsset?.availability
+
+    LaunchedEffect(assetId, assetAvailability) {
         playerError = null
         playbackEnded = false
-        if (selectedAsset != null && selectedAsset.isAvailable) {
+        if (selectedAsset != null && assetAvailability == Availability.Available) {
             try {
                 exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(selectedAsset.sourceUri)))
                 exoPlayer.seekTo(0)
@@ -292,7 +298,13 @@ fun EditorScreen(
                     ) {
                         if (uiState.assets.isEmpty()) {
                             TimelineEmptyState(
-                                onAddMediaClick = { openMediaLauncher.launch(arrayOf("video/*")) },
+                                onAddMediaClick = {
+                                    if (isAddMediaEnabled) {
+                                        openMediaLauncher.launch(arrayOf("video/*"))
+                                    }
+                                },
+                                importProgress = uiState.importProgress,
+                                isAddMediaEnabled = isAddMediaEnabled,
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxWidth()
@@ -303,6 +315,7 @@ fun EditorScreen(
                                 selectedAssetId = uiState.selectedAssetId,
                                 onSelectAsset = { viewModel.selectAsset(it) },
                                 onRemoveAsset = { viewModel.removeAsset(it) },
+                                importProgress = uiState.importProgress,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = StudioSpacing.md)
@@ -312,8 +325,13 @@ fun EditorScreen(
                         Spacer(modifier = Modifier.height(StudioSpacing.sm))
 
                         EditorBottomBar(
-                            onAddMediaClick = { openMediaLauncher.launch(arrayOf("video/*")) },
-                            onMoreClick = { showRenameSheet = true }
+                            onAddMediaClick = {
+                                if (isAddMediaEnabled) {
+                                    openMediaLauncher.launch(arrayOf("video/*"))
+                                }
+                            },
+                            onMoreClick = { showRenameSheet = true },
+                            isAddMediaEnabled = isAddMediaEnabled
                         )
                     }
                 }
@@ -335,7 +353,7 @@ fun EditorScreen(
                             hasAssets = uiState.assets.isNotEmpty(),
                             errorMessage = playerError,
                             modifier = Modifier
-                                .weight(1.2f)
+                                .weight(1f, fill = false)
                                 .align(Alignment.CenterHorizontally)
                         )
                         Spacer(modifier = Modifier.height(StudioSpacing.xs))
@@ -351,7 +369,13 @@ fun EditorScreen(
 
                         if (uiState.assets.isEmpty()) {
                             TimelineEmptyState(
-                                onAddMediaClick = { openMediaLauncher.launch(arrayOf("video/*")) },
+                                onAddMediaClick = {
+                                    if (isAddMediaEnabled) {
+                                        openMediaLauncher.launch(arrayOf("video/*"))
+                                    }
+                                },
+                                importProgress = uiState.importProgress,
+                                isAddMediaEnabled = isAddMediaEnabled,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f)
@@ -362,6 +386,7 @@ fun EditorScreen(
                                 selectedAssetId = uiState.selectedAssetId,
                                 onSelectAsset = { viewModel.selectAsset(it) },
                                 onRemoveAsset = { viewModel.removeAsset(it) },
+                                importProgress = uiState.importProgress,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = StudioSpacing.lg)
@@ -371,8 +396,13 @@ fun EditorScreen(
                     }
 
                     EditorBottomBar(
-                        onAddMediaClick = { openMediaLauncher.launch(arrayOf("video/*")) },
-                        onMoreClick = { showRenameSheet = true }
+                        onAddMediaClick = {
+                            if (isAddMediaEnabled) {
+                                openMediaLauncher.launch(arrayOf("video/*"))
+                            }
+                        },
+                        onMoreClick = { showRenameSheet = true },
+                        isAddMediaEnabled = isAddMediaEnabled
                     )
                 }
             }

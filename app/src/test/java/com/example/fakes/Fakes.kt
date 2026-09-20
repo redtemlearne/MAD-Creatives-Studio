@@ -1,13 +1,75 @@
 package com.example.fakes
 
+import com.example.data.media.MediaImporter
+import com.example.data.media.ThumbnailGenerator
+import com.example.data.media.UriAvailabilityChecker
+import com.example.data.media.UriGrantManager
+import com.example.data.media.VideoMetadata
+import com.example.data.media.VideoMetadataReader
 import com.example.data.repository.MediaRepository
 import com.example.data.repository.ProjectRepository
+import com.example.di.AppContainer
+import com.example.model.Availability
 import com.example.model.MediaAsset
 import com.example.model.Project
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import java.util.UUID
+
+class FakeVideoMetadataReader : VideoMetadataReader {
+    val readCalls = mutableListOf<String>()
+    var metadataMap = mutableMapOf<String, VideoMetadata?>()
+    var exceptionToThrow: Exception? = null
+
+    override fun read(uri: String): VideoMetadata? {
+        readCalls.add(uri)
+        exceptionToThrow?.let { throw it }
+        return metadataMap[uri] ?: VideoMetadata(
+            displayName = "Test_Video",
+            mimeType = "video/mp4",
+            sizeBytes = 1024L,
+            durationMs = 5000L,
+            width = 1080,
+            height = 1920,
+            rotationDegrees = 0
+        )
+    }
+}
+
+class FakeUriGrantManager : UriGrantManager {
+    val persistCalls = mutableListOf<String>()
+    val releasedUris = mutableListOf<String>()
+    var persistSucceeds = mutableMapOf<String, Boolean>()
+
+    override fun persist(uri: String): Boolean {
+        persistCalls.add(uri)
+        return persistSucceeds[uri] ?: true
+    }
+
+    override fun release(uri: String) {
+        releasedUris.add(uri)
+    }
+}
+
+class FakeThumbnailGenerator : ThumbnailGenerator {
+    val generateCalls = mutableListOf<Pair<String, String>>()
+    var shouldSucceed = true
+
+    override fun generate(assetId: String, uri: String): Boolean {
+        generateCalls.add(assetId to uri)
+        return shouldSucceed
+    }
+}
+
+class FakeUriAvailabilityChecker : UriAvailabilityChecker {
+    val availabilityMap = mutableMapOf<String, Boolean>()
+    var defaultAvailability = true
+
+    override suspend fun isAvailable(uri: String): Boolean {
+        return availabilityMap[uri] ?: defaultAvailability
+    }
+}
 
 class FakeProjectRepository : ProjectRepository {
     private val projectsMap = MutableStateFlow<Map<String, Project>>(emptyMap())
@@ -33,7 +95,8 @@ class FakeProjectRepository : ProjectRepository {
             updatedAt = now,
             aspectRatio = "9:16",
             clipCount = 0,
-            firstAssetId = null
+            firstAssetId = null,
+            firstAssetSourceUri = null
         )
         projectsMap.value = projectsMap.value + (project.id to project)
         return project
@@ -83,9 +146,9 @@ class FakeMediaRepository : MediaRepository {
         return assetsMap.value.values.count { it.sourceUri == uri }
     }
 
-    fun setAssetAvailability(id: String, isAvailable: Boolean) {
+    fun setAssetAvailability(id: String, availability: Availability) {
         val current = assetsMap.value[id] ?: return
-        assetsMap.value = assetsMap.value + (id to current.copy(isAvailable = isAvailable))
+        assetsMap.value = assetsMap.value + (id to current.copy(availability = availability))
     }
 
     fun getAssetDirect(id: String): MediaAsset? {
@@ -95,6 +158,16 @@ class FakeMediaRepository : MediaRepository {
 
 class TestAppContainer(
     override val projectRepository: ProjectRepository = FakeProjectRepository(),
-    override val mediaRepository: MediaRepository = FakeMediaRepository()
-) : com.example.di.AppContainer
-
+    override val mediaRepository: MediaRepository = FakeMediaRepository(),
+    override val videoMetadataReader: VideoMetadataReader = FakeVideoMetadataReader(),
+    override val uriGrantManager: UriGrantManager = FakeUriGrantManager(),
+    override val thumbnailGenerator: ThumbnailGenerator = FakeThumbnailGenerator(),
+    override val uriAvailabilityChecker: UriAvailabilityChecker = FakeUriAvailabilityChecker(),
+    override val mediaImporter: MediaImporter = MediaImporter(
+        videoMetadataReader = videoMetadataReader,
+        uriGrantManager = uriGrantManager,
+        thumbnailGenerator = thumbnailGenerator,
+        mediaRepository = mediaRepository,
+        projectRepository = projectRepository
+    )
+) : AppContainer

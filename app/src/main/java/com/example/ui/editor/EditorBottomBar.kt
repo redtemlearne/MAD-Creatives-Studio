@@ -17,7 +17,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.StudioIconButton
 import com.example.ui.components.StudioPrimaryButton
-import com.example.ui.components.StudioSecondaryButton
 import com.example.ui.theme.StudioBorder
 import com.example.ui.theme.StudioSpacing
 import com.example.ui.theme.StudioSurfacePrimary
@@ -27,7 +26,8 @@ import com.example.ui.theme.StudioTextSecondary
 fun EditorBottomBar(
     onAddMediaClick: () -> Unit,
     onMoreClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isAddMediaEnabled: Boolean = true
 ) {
     Row(
         modifier = modifier
@@ -45,6 +45,7 @@ fun EditorBottomBar(
             text = "Add Media",
             icon = Icons.Default.Add,
             onClick = onAddMediaClick,
+            enabled = isAddMediaEnabled,
             modifier = Modifier.testTag("bottom_add_media_button")
         )
 

@@ -7,5 +7,6 @@ data class Project(
     val updatedAt: Long,
     val aspectRatio: String = "9:16",
     val clipCount: Int = 0,
-    val firstAssetId: String? = null
+    val firstAssetId: String? = null,
+    val firstAssetSourceUri: String? = null
 )

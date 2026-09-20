@@ -62,7 +62,8 @@ fun ProjectCard(
             .background(StudioSurfacePrimary)
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = onLongClick,
+                onLongClickLabel = "Project options"
             )
             .padding(StudioSpacing.md)
             .testTag("project_card_${project.id}"),
@@ -82,7 +83,7 @@ fun ProjectCard(
             if (project.firstAssetId != null) {
                 AssetThumbnail(
                     assetId = project.firstAssetId,
-                    sourceUri = "",
+                    sourceUri = project.firstAssetSourceUri ?: "",
                     modifier = Modifier.matchParentSize()
                 )
             } else {

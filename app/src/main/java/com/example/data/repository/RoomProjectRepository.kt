@@ -29,7 +29,8 @@ class RoomProjectRepository(
                     updatedAt = entity.updatedAt,
                     aspectRatio = entity.aspectRatio,
                     clipCount = entity.clipCount,
-                    firstAssetId = entity.firstAssetId
+                    firstAssetId = entity.firstAssetId,
+                    firstAssetSourceUri = entity.firstAssetSourceUri
                 )
             }
         }
@@ -45,7 +46,8 @@ class RoomProjectRepository(
                     updatedAt = it.updatedAt,
                     aspectRatio = it.aspectRatio,
                     clipCount = it.clipCount,
-                    firstAssetId = it.firstAssetId
+                    firstAssetId = it.firstAssetId,
+                    firstAssetSourceUri = it.firstAssetSourceUri
                 )
             }
         }
@@ -60,7 +62,8 @@ class RoomProjectRepository(
                 updatedAt = it.updatedAt,
                 aspectRatio = it.aspectRatio,
                 clipCount = it.clipCount,
-                firstAssetId = it.firstAssetId
+                firstAssetId = it.firstAssetId,
+                firstAssetSourceUri = it.firstAssetSourceUri
             )
         }
     }

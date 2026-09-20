@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.MovieCreation
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,7 +32,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.example.model.Availability
 import com.example.model.MediaAsset
+import com.example.ui.theme.StudioAccent
 import com.example.ui.theme.StudioBorder
 import com.example.ui.theme.StudioDestructive
 import com.example.ui.theme.StudioRadius
@@ -61,36 +64,8 @@ fun VideoPreviewArea(
         contentAlignment = Alignment.Center
     ) {
         when {
-            errorMessage != null -> {
-                // Inline player error message
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(StudioSpacing.md)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ErrorOutline,
-                        contentDescription = null,
-                        tint = StudioDestructive,
-                        modifier = Modifier.size(36.dp)
-                    )
-                    Spacer(modifier = Modifier.height(StudioSpacing.sm))
-                    Text(
-                        text = errorMessage,
-                        style = StudioTypography.titleMedium,
-                        color = StudioTextSecondary
-                    )
-                    Spacer(modifier = Modifier.height(StudioSpacing.xxs))
-                    Text(
-                        text = "The video cannot be played",
-                        style = StudioTypography.labelSmall,
-                        color = StudioTextMuted
-                    )
-                }
-            }
-
-            selectedAsset != null && !selectedAsset.isAvailable -> {
-                // Asset is unavailable
+            // 1. Unavailable state (highest precedence)
+            selectedAsset != null && selectedAsset.availability == Availability.Unavailable -> {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
@@ -117,8 +92,52 @@ fun VideoPreviewArea(
                 }
             }
 
-            selectedAsset != null && player != null -> {
-                // Render ExoPlayer via PlayerView inside FIT letterboxed mode
+            // 2. While selected asset is Unknown, show a small progress indicator
+            selectedAsset != null && selectedAsset.availability == Availability.Unknown -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = StudioAccent,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("preview_unknown_progress")
+                    )
+                }
+            }
+
+            // 3. Player error
+            errorMessage != null -> {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(StudioSpacing.md)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ErrorOutline,
+                        contentDescription = null,
+                        tint = StudioDestructive,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(modifier = Modifier.height(StudioSpacing.sm))
+                    Text(
+                        text = errorMessage,
+                        style = StudioTypography.titleMedium,
+                        color = StudioTextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(StudioSpacing.xxs))
+                    Text(
+                        text = "The video cannot be played",
+                        style = StudioTypography.labelSmall,
+                        color = StudioTextMuted
+                    )
+                }
+            }
+
+            // 4. Render ExoPlayer via PlayerView when Available
+            selectedAsset != null && selectedAsset.availability == Availability.Available && player != null -> {
                 AndroidView(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
@@ -135,8 +154,8 @@ fun VideoPreviewArea(
                 )
             }
 
+            // 5. Assets exist but none selected
             hasAssets -> {
-                // Assets exist but none selected
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -156,8 +175,8 @@ fun VideoPreviewArea(
                 }
             }
 
+            // 6. Empty state: No media imported yet
             else -> {
-                // Empty state: No media imported yet
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center

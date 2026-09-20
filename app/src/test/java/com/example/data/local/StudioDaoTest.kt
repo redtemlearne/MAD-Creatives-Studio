@@ -97,6 +97,7 @@ class StudioDaoTest {
         assertEquals("proj-1", stats[0].id)
         assertEquals(2, stats[0].clipCount)
         assertEquals("asset-1", stats[0].firstAssetId)
+        assertEquals("content://media/1", stats[0].firstAssetSourceUri)
     }
 
     @Test

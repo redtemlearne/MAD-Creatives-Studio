@@ -1,23 +1,26 @@
 package com.example.ui.editor
 
-import android.content.Context
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.media.MediaImporter
+import com.example.data.media.UriAvailabilityChecker
 import com.example.data.repository.MediaRepository
 import com.example.data.repository.ProjectRepository
+import com.example.model.Availability
 import com.example.model.MediaAsset
 import com.example.model.Project
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+
+data class ImportProgress(
+    val current: Int,
+    val total: Int
+)
 
 data class EditorUiState(
     val project: Project? = null,
@@ -25,9 +28,10 @@ data class EditorUiState(
     val projectNotFound: Boolean = false,
     val assets: List<MediaAsset> = emptyList(),
     val selectedAssetId: String? = null,
-    val isImporting: Boolean = false,
+    val importProgress: ImportProgress? = null,
     val snackbarMessage: String? = null
 ) {
+    val isImporting: Boolean get() = importProgress != null
     val selectedAsset: MediaAsset?
         get() = assets.find { it.id == selectedAssetId }
 }
@@ -36,14 +40,13 @@ class EditorViewModel(
     val projectId: String,
     private val projectRepository: ProjectRepository,
     private val mediaRepository: MediaRepository,
-    private val context: Context
+    private val mediaImporter: MediaImporter,
+    private val uriAvailabilityChecker: UriAvailabilityChecker
 ) : ViewModel() {
 
-    private val mediaImporter = MediaImporter(context, mediaRepository)
-
     private val _selectedAssetId = MutableStateFlow<String?>(null)
-    private val _availabilityMap = MutableStateFlow<Map<String, Boolean>>(emptyMap())
-    private val _isImporting = MutableStateFlow(false)
+    private val _availabilityMap = MutableStateFlow<Map<String, Availability>>(emptyMap())
+    private val _importProgress = MutableStateFlow<ImportProgress?>(null)
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     private val _initialLoadDone = MutableStateFlow(false)
 
@@ -56,8 +59,8 @@ class EditorViewModel(
         _availabilityMap
     ) { rawAssets, availability ->
         rawAssets.map { asset ->
-            val isAvail = availability[asset.id] ?: true
-            asset.copy(isAvailable = isAvail)
+            val avail = availability[asset.id] ?: Availability.Unknown
+            asset.copy(availability = avail)
         }
     }
 
@@ -65,7 +68,7 @@ class EditorViewModel(
         projectFlow,
         assetsFlow,
         _selectedAssetId,
-        _isImporting,
+        _importProgress,
         _snackbarMessage,
         _initialLoadDone
     ) { flows ->
@@ -73,26 +76,16 @@ class EditorViewModel(
         @Suppress("UNCHECKED_CAST")
         val assets = flows[1] as List<MediaAsset>
         val selectedId = flows[2] as String?
-        val isImporting = flows[3] as Boolean
+        val importProg = flows[3] as ImportProgress?
         val snackbarMsg = flows[4] as String?
         val initialLoadDone = flows[5] as Boolean
 
-        // Auto-select first asset if none selected or if previously selected asset was removed
+        // Pure transform: no writes to _selectedAssetId inside combine
+        // Auto-selection never selects an unavailable asset unless all assets are unavailable
         val effectiveSelectedId = when {
-            selectedId != null && assets.any { it.id == selectedId } -> selectedId
-            assets.isNotEmpty() -> {
-                val firstId = assets.first().id
-                if (_selectedAssetId.value != firstId) {
-                    _selectedAssetId.value = firstId
-                }
-                firstId
-            }
-            else -> {
-                if (_selectedAssetId.value != null) {
-                    _selectedAssetId.value = null
-                }
-                null
-            }
+            selectedId != null && assets.any { it.id == selectedId && it.isAvailable } -> selectedId
+            selectedId != null && assets.any { it.id == selectedId } && assets.none { it.isAvailable } -> selectedId
+            else -> assets.firstOrNull { it.isAvailable }?.id ?: assets.firstOrNull()?.id
         }
 
         val isLoading = !initialLoadDone && project == null
@@ -104,7 +97,7 @@ class EditorViewModel(
             projectNotFound = notFound,
             assets = assets,
             selectedAssetId = effectiveSelectedId,
-            isImporting = isImporting,
+            importProgress = importProg,
             snackbarMessage = snackbarMsg
         )
     }.stateIn(
@@ -115,7 +108,6 @@ class EditorViewModel(
 
     init {
         viewModelScope.launch {
-            // First check if project exists
             val proj = projectRepository.getProjectOnce(projectId)
             _initialLoadDone.value = true
             if (proj != null) {
@@ -125,17 +117,12 @@ class EditorViewModel(
     }
 
     fun checkAssetsAvailability() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             val currentAssets = mediaRepository.getAssetsOnce(projectId)
-            val newAvailability = mutableMapOf<String, Boolean>()
+            val newAvailability = mutableMapOf<String, Availability>()
             currentAssets.forEach { asset ->
-                val available = try {
-                    val uri = Uri.parse(asset.sourceUri)
-                    context.contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false
-                } catch (_: Exception) {
-                    false
-                }
-                newAvailability[asset.id] = available
+                val isAvail = uriAvailabilityChecker.isAvailable(asset.sourceUri)
+                newAvailability[asset.id] = if (isAvail) Availability.Available else Availability.Unavailable
             }
             _availabilityMap.value = newAvailability
         }
@@ -145,12 +132,18 @@ class EditorViewModel(
         _selectedAssetId.value = assetId
     }
 
-    fun importVideos(uris: List<Uri>) {
+    fun importVideos(uris: List<String>) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
-            _isImporting.value = true
-            val result = mediaImporter.importVideos(projectId, uris)
-            _isImporting.value = false
+            _importProgress.value = ImportProgress(1, uris.size)
+            val result = mediaImporter.importVideos(
+                projectId = projectId,
+                uris = uris,
+                onProgress = { current, total ->
+                    _importProgress.value = ImportProgress(current, total)
+                }
+            )
+            _importProgress.value = null
 
             // Report failures in ONE Snackbar ("2 of 3 videos couldn't be imported")
             if (result.failedCount > 0) {
@@ -162,17 +155,23 @@ class EditorViewModel(
                 _snackbarMessage.value = message
             }
 
-            // Recheck availability and trigger auto-selection
             checkAssetsAvailability()
         }
     }
 
     fun removeAsset(assetId: String) {
         viewModelScope.launch {
+            val currentAssets = mediaRepository.getAssetsOnce(projectId)
+            val currentIndex = currentAssets.indexOfFirst { it.id == assetId }
             mediaRepository.removeAsset(assetId)
-            val remaining = mediaRepository.getAssetsOnce(projectId)
             if (_selectedAssetId.value == assetId) {
-                _selectedAssetId.value = remaining.firstOrNull()?.id
+                val remaining = mediaRepository.getAssetsOnce(projectId)
+                val nextAsset = if (currentIndex in remaining.indices) {
+                    remaining[currentIndex]
+                } else {
+                    remaining.lastOrNull()
+                }
+                _selectedAssetId.value = nextAsset?.id
             }
         }
     }
@@ -192,11 +191,18 @@ class EditorViewModel(
             projectId: String,
             projectRepository: ProjectRepository,
             mediaRepository: MediaRepository,
-            context: Context
+            mediaImporter: MediaImporter,
+            uriAvailabilityChecker: UriAvailabilityChecker
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return EditorViewModel(projectId, projectRepository, mediaRepository, context) as T
+                return EditorViewModel(
+                    projectId = projectId,
+                    projectRepository = projectRepository,
+                    mediaRepository = mediaRepository,
+                    mediaImporter = mediaImporter,
+                    uriAvailabilityChecker = uriAvailabilityChecker
+                ) as T
             }
         }
     }

@@ -56,6 +56,7 @@ import com.example.util.isWide
 @Composable
 fun HomeScreen(
     projects: List<Project>,
+    isLoading: Boolean = false,
     onOpenProject: (projectId: String) -> Unit,
     onCreateProject: (projectName: String) -> Unit,
     onDeleteProject: (projectId: String) -> Unit = {},
@@ -105,7 +106,7 @@ fun HomeScreen(
         containerColor = StudioBackground,
         contentWindowInsets = WindowInsets.safeDrawing,
         floatingActionButton = {
-            if (projects.isNotEmpty()) {
+            if (projects.isNotEmpty() && !isLoading) {
                 FloatingActionButton(
                     onClick = { showNewProjectSheet = true },
                     containerColor = StudioAccent,
@@ -140,6 +141,11 @@ fun HomeScreen(
             ) {
                 // Top Branding Area
                 HomeTopBar()
+
+                if (isLoading && projects.isEmpty()) {
+                    // While loading with no projects yet, render only the background
+                    return@Column
+                }
 
                 // Main Content Area
                 LazyColumn(
@@ -177,13 +183,15 @@ fun HomeScreen(
                     }
 
                     if (projects.isEmpty()) {
-                        item {
-                            EmptyProjectsState(
-                                onNewProjectClick = { showNewProjectSheet = true },
-                                modifier = Modifier
-                                    .padding(top = StudioSpacing.lg)
-                                    .testTag("empty_projects_state")
-                            )
+                        if (!isLoading) {
+                            item {
+                                EmptyProjectsState(
+                                    onNewProjectClick = { showNewProjectSheet = true },
+                                    modifier = Modifier
+                                        .padding(top = StudioSpacing.lg)
+                                        .testTag("empty_projects_state")
+                                )
+                            }
                         }
                     } else {
                         items(

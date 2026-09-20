@@ -19,7 +19,8 @@ interface ProjectDao {
             p.updatedAt,
             p.aspectRatio,
             COUNT(m.id) AS clipCount,
-            (SELECT m2.id FROM media_assets m2 WHERE m2.projectId = p.id ORDER BY m2.addedAt ASC LIMIT 1) AS firstAssetId
+            (SELECT m2.id FROM media_assets m2 WHERE m2.projectId = p.id ORDER BY m2.addedAt ASC LIMIT 1) AS firstAssetId,
+            (SELECT m2.sourceUri FROM media_assets m2 WHERE m2.projectId = p.id ORDER BY m2.addedAt ASC LIMIT 1) AS firstAssetSourceUri
         FROM projects p
         LEFT JOIN media_assets m ON p.id = m.projectId
         GROUP BY p.id
@@ -37,7 +38,8 @@ interface ProjectDao {
             p.updatedAt,
             p.aspectRatio,
             COUNT(m.id) AS clipCount,
-            (SELECT m2.id FROM media_assets m2 WHERE m2.projectId = p.id ORDER BY m2.addedAt ASC LIMIT 1) AS firstAssetId
+            (SELECT m2.id FROM media_assets m2 WHERE m2.projectId = p.id ORDER BY m2.addedAt ASC LIMIT 1) AS firstAssetId,
+            (SELECT m2.sourceUri FROM media_assets m2 WHERE m2.projectId = p.id ORDER BY m2.addedAt ASC LIMIT 1) AS firstAssetSourceUri
         FROM projects p
         LEFT JOIN media_assets m ON p.id = m.projectId
         WHERE p.id = :id
@@ -55,7 +57,8 @@ interface ProjectDao {
             p.updatedAt,
             p.aspectRatio,
             COUNT(m.id) AS clipCount,
-            (SELECT m2.id FROM media_assets m2 WHERE m2.projectId = p.id ORDER BY m2.addedAt ASC LIMIT 1) AS firstAssetId
+            (SELECT m2.id FROM media_assets m2 WHERE m2.projectId = p.id ORDER BY m2.addedAt ASC LIMIT 1) AS firstAssetId,
+            (SELECT m2.sourceUri FROM media_assets m2 WHERE m2.projectId = p.id ORDER BY m2.addedAt ASC LIMIT 1) AS firstAssetSourceUri
         FROM projects p
         LEFT JOIN media_assets m ON p.id = m.projectId
         WHERE p.id = :id

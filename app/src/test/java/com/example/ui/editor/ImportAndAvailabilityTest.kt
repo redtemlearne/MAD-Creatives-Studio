@@ -1,218 +1,416 @@
 package com.example.ui.editor
 
 import com.example.data.media.MediaImporter
+import com.example.data.media.VideoMetadata
 import com.example.fakes.FakeMediaRepository
 import com.example.fakes.FakeProjectRepository
+import com.example.fakes.FakeThumbnailGenerator
+import com.example.fakes.FakeUriAvailabilityChecker
+import com.example.fakes.FakeUriGrantManager
+import com.example.fakes.FakeVideoMetadataReader
+import com.example.model.Availability
 import com.example.model.MediaAsset
 import com.example.model.Project
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ImportAndAvailabilityTest {
+
+    private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var projectRepo: FakeProjectRepository
     private lateinit var mediaRepo: FakeMediaRepository
+    private lateinit var metadataReader: FakeVideoMetadataReader
+    private lateinit var grantManager: FakeUriGrantManager
+    private lateinit var thumbnailGenerator: FakeThumbnailGenerator
+    private lateinit var availabilityChecker: FakeUriAvailabilityChecker
+    private lateinit var importer: MediaImporter
 
     @Before
     fun setup() {
+        Dispatchers.setMain(testDispatcher)
         projectRepo = FakeProjectRepository()
         mediaRepo = FakeMediaRepository()
+        metadataReader = FakeVideoMetadataReader()
+        grantManager = FakeUriGrantManager()
+        thumbnailGenerator = FakeThumbnailGenerator()
+        availabilityChecker = FakeUriAvailabilityChecker()
+        importer = MediaImporter(
+            videoMetadataReader = metadataReader,
+            uriGrantManager = grantManager,
+            thumbnailGenerator = thumbnailGenerator,
+            mediaRepository = mediaRepo,
+            projectRepository = projectRepo,
+            dispatcher = testDispatcher
+        )
     }
 
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    // --- MediaImporter Tests ---
+
     @Test
-    fun importFlow_successPath_writesToRepositoryAndUpdatesProject() = runBlocking {
-        val initialTimestamp = 1000L
+    fun importer_success_writesAssetAndBumpsProjectUpdatedAt() = runTest(testDispatcher) {
+        val initialTime = 1000L
         projectRepo.setProject(
             Project(
                 id = "p1",
-                name = "My Project",
-                createdAt = initialTimestamp,
-                updatedAt = initialTimestamp,
+                name = "Test Project",
+                createdAt = initialTime,
+                updatedAt = initialTime,
                 aspectRatio = "9:16"
             )
         )
 
-        val asset = MediaAsset(
-            id = "a1",
-            projectId = "p1",
-            sourceUri = "content://media/external/video/1",
-            displayName = "video1.mp4",
-            mimeType = "video/mp4",
-            sizeBytes = 1024L,
-            durationMs = 5000L,
-            width = 1080,
-            height = 1920,
-            rotationDegrees = 0,
-            addedAt = 2000L,
-            isAvailable = true
-        )
+        val result = importer.importVideos("p1", listOf("content://media/1"))
 
-        // Write to media repository
-        mediaRepo.addAsset(asset)
-        projectRepo.updateProjectTimestamp("p1", 2000L)
+        assertEquals(1, result.totalAttempted)
+        assertEquals(1, result.importedCount)
+        assertEquals(0, result.failedCount)
+        assertEquals(0, result.skippedDuplicates)
 
-        // Verify media repo has asset
         val assets = mediaRepo.getAssets("p1").first()
         assertEquals(1, assets.size)
-        assertEquals("a1", assets[0].id)
-        assertEquals("video1.mp4", assets[0].displayName)
+        assertEquals("content://media/1", assets[0].sourceUri)
+        assertEquals(Availability.Available, assets[0].availability)
 
-        // Verify project timestamp was updated
-        val updatedProject = projectRepo.getProject("p1").first()
-        assertEquals(2000L, updatedProject?.updatedAt)
+        val updatedProject = projectRepo.getProjectOnce("p1")
+        assertNotNull(updatedProject)
+        assertTrue(updatedProject!!.updatedAt > initialTime)
     }
 
     @Test
-    fun importFlow_emptyUriList_doesNothing() = runBlocking {
+    fun importer_duplicateUri_skippedAndNotCountedAsFailure() = runTest(testDispatcher) {
         projectRepo.setProject(
             Project(
                 id = "p1",
-                name = "My Project",
+                name = "Test Project",
                 createdAt = 1000L,
                 updatedAt = 1000L,
                 aspectRatio = "9:16"
             )
         )
 
-        val uris = emptyList<String>()
-        val importResult = if (uris.isEmpty()) {
-            MediaImporter.ImportResult(totalAttempted = 0, importedCount = 0, failedCount = 0)
-        } else {
-            MediaImporter.ImportResult(totalAttempted = uris.size, importedCount = 1, failedCount = 0)
-        }
+        // First import
+        importer.importVideos("p1", listOf("content://media/1"))
 
-        assertEquals(0, importResult.totalAttempted)
-        assertEquals(0, importResult.importedCount)
-        assertEquals(0, importResult.failedCount)
+        // Duplicate import
+        val duplicateResult = importer.importVideos("p1", listOf("content://media/1"))
 
+        assertEquals(0, duplicateResult.totalAttempted)
+        assertEquals(0, duplicateResult.importedCount)
+        assertEquals(0, duplicateResult.failedCount)
+        assertEquals(1, duplicateResult.skippedDuplicates)
+
+        val assets = mediaRepo.getAssets("p1").first()
+        assertEquals(1, assets.size)
+    }
+
+    @Test
+    fun importer_persistFailure_failedMetadataNeverReadNoAsset() = runTest(testDispatcher) {
+        grantManager.persistSucceeds["content://media/unauthorized"] = false
+
+        val result = importer.importVideos("p1", listOf("content://media/unauthorized"))
+
+        assertEquals(1, result.totalAttempted)
+        assertEquals(0, result.importedCount)
+        assertEquals(1, result.failedCount)
+        assertEquals(0, result.skippedDuplicates)
+
+        assertFalse(metadataReader.readCalls.contains("content://media/unauthorized"))
         val assets = mediaRepo.getAssets("p1").first()
         assertTrue(assets.isEmpty())
     }
 
     @Test
-    fun importFlow_extractionFailure_dropsBadUriAndReportsFailureWithoutBlockingValidOnes() = runBlocking {
-        projectRepo.setProject(
-            Project(
-                id = "p1",
-                name = "My Project",
-                createdAt = 1000L,
-                updatedAt = 1000L,
-                aspectRatio = "9:16"
+    fun importer_metadataException_failedNoAssetGrantReleased() = runTest(testDispatcher) {
+        metadataReader.exceptionToThrow = IllegalStateException("Corrupt header")
+
+        val result = importer.importVideos("p1", listOf("content://media/corrupt"))
+
+        assertEquals(1, result.totalAttempted)
+        assertEquals(0, result.importedCount)
+        assertEquals(1, result.failedCount)
+
+        val assets = mediaRepo.getAssets("p1").first()
+        assertTrue(assets.isEmpty())
+        assertTrue(grantManager.releasedUris.contains("content://media/corrupt"))
+    }
+
+    @Test
+    fun importer_zeroDuration_failedGrantReleased() = runTest(testDispatcher) {
+        metadataReader.metadataMap["content://media/zero_duration"] = VideoMetadata(
+            displayName = "empty.mp4",
+            mimeType = "video/mp4",
+            sizeBytes = 1024L,
+            durationMs = 0L,
+            width = 1920,
+            height = 1080,
+            rotationDegrees = 0
+        )
+
+        val result = importer.importVideos("p1", listOf("content://media/zero_duration"))
+
+        assertEquals(1, result.totalAttempted)
+        assertEquals(0, result.importedCount)
+        assertEquals(1, result.failedCount)
+
+        val assets = mediaRepo.getAssets("p1").first()
+        assertTrue(assets.isEmpty())
+        assertTrue(grantManager.releasedUris.contains("content://media/zero_duration"))
+    }
+
+    @Test
+    fun importer_grantNotReleasedWhenAnotherAssetUsesSameUri() = runTest(testDispatcher) {
+        // Existing asset uses uri_shared
+        mediaRepo.addAsset(
+            MediaAsset(
+                id = "existing_asset",
+                projectId = "p2",
+                sourceUri = "content://media/shared",
+                displayName = "shared.mp4",
+                mimeType = "video/mp4",
+                sizeBytes = 1024L,
+                durationMs = 5000L,
+                width = 1080,
+                height = 1920,
+                rotationDegrees = 0,
+                addedAt = 1000L
             )
         )
 
-        val validAsset = MediaAsset(
-            id = "a1",
-            projectId = "p1",
-            sourceUri = "content://valid/1",
-            displayName = "valid.mp4",
-            mimeType = "video/mp4",
-            sizeBytes = 1024L,
-            durationMs = 4000L,
-            width = 1080,
-            height = 1920,
-            rotationDegrees = 0,
-            addedAt = 1500L,
-            isAvailable = true
+        // Metadata fails for this import of the same URI
+        metadataReader.exceptionToThrow = RuntimeException("Temporary read failure")
+
+        val result = importer.importVideos("p1", listOf("content://media/shared"))
+
+        assertEquals(1, result.totalAttempted)
+        assertEquals(1, result.failedCount)
+
+        // Grant must NOT be released because p2 still uses this URI!
+        assertFalse(grantManager.releasedUris.contains("content://media/shared"))
+    }
+
+    @Test
+    fun importer_mixedBatch_returnsCorrectCounts() = runTest(testDispatcher) {
+        // Set up existing asset for duplicate check
+        mediaRepo.addAsset(
+            MediaAsset(
+                id = "existing",
+                projectId = "p1",
+                sourceUri = "content://media/existing",
+                displayName = "existing.mp4",
+                mimeType = "video/mp4",
+                sizeBytes = 1024L,
+                durationMs = 5000L,
+                width = 1080,
+                height = 1920,
+                rotationDegrees = 0,
+                addedAt = 1000L
+            )
         )
 
-        // Simulated result where 1 valid asset succeeded, 2 failed
-        val importResult = MediaImporter.ImportResult(
-            totalAttempted = 3,
-            importedCount = 1,
-            failedCount = 2
+        grantManager.persistSucceeds["content://media/no_grant"] = false
+
+        val uris = listOf(
+            "content://media/existing", // duplicate -> skipped, not counted in totalAttempted
+            "content://media/valid",    // valid -> imported
+            "content://media/no_grant"  // persist failure -> failed
         )
 
-        mediaRepo.addAsset(validAsset)
+        val result = importer.importVideos("p1", uris)
 
-        val assets = mediaRepo.getAssets("p1").first()
+        assertEquals(2, result.totalAttempted)
+        assertEquals(1, result.importedCount)
+        assertEquals(1, result.failedCount)
+        assertEquals(1, result.skippedDuplicates)
+    }
+
+    // --- EditorViewModel Tests ---
+
+    @Test
+    fun editorViewModel_selectionDefaultsToFirstAsset_fallsBackCorrectlyOnRemoval() = runTest(testDispatcher) {
+        projectRepo.setProject(Project(id = "p1", name = "Test", createdAt = 1000L, updatedAt = 1000L, aspectRatio = "9:16"))
+        val asset1 = MediaAsset(
+            id = "a1", projectId = "p1", sourceUri = "content://media/1", displayName = "v1.mp4",
+            mimeType = "video/mp4", sizeBytes = 1024L, durationMs = 3000L, width = 1080, height = 1920,
+            rotationDegrees = 0, addedAt = 1000L, availability = Availability.Available
+        )
+        val asset2 = MediaAsset(
+            id = "a2", projectId = "p1", sourceUri = "content://media/2", displayName = "v2.mp4",
+            mimeType = "video/mp4", sizeBytes = 1024L, durationMs = 3000L, width = 1080, height = 1920,
+            rotationDegrees = 0, addedAt = 2000L, availability = Availability.Available
+        )
+        mediaRepo.addAsset(asset1)
+        mediaRepo.addAsset(asset2)
+
+        val vm = EditorViewModel("p1", projectRepo, mediaRepo, importer, availabilityChecker)
+        val collectJob = launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        // Selection defaults to first asset
+        assertEquals("a1", vm.uiState.value.selectedAssetId)
+
+        // Removing selected asset falls back to next
+        vm.removeAsset("a1")
+        advanceUntilIdle()
+
+        assertEquals("a2", vm.uiState.value.selectedAssetId)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun editorViewModel_importVideos_turnsImportProgressOnThenOff_andSetsOneSnackbarOnFailure_noneIfNothingFailed() = runTest(testDispatcher) {
+        projectRepo.setProject(Project(id = "p1", name = "Test", createdAt = 1000L, updatedAt = 1000L, aspectRatio = "9:16"))
+        val vm = EditorViewModel("p1", projectRepo, mediaRepo, importer, availabilityChecker)
+        val collectJob = launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        // Successful import -> no snackbar
+        vm.importVideos(listOf("content://media/success1"))
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.importProgress)
+        assertNull(vm.uiState.value.snackbarMessage)
+
+        // Import failure -> one snackbar message
+        grantManager.persistSucceeds["content://media/fail1"] = false
+        vm.importVideos(listOf("content://media/fail1"))
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.importProgress)
+        assertEquals("1 video couldn't be imported", vm.uiState.value.snackbarMessage)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun editorViewModel_unavailableAssets_remainInAssetListWithAvailabilityUnavailable() = runTest(testDispatcher) {
+        projectRepo.setProject(Project(id = "p1", name = "Test", createdAt = 1000L, updatedAt = 1000L, aspectRatio = "9:16"))
+        val asset = MediaAsset(
+            id = "a_unavail", projectId = "p1", sourceUri = "content://media/missing", displayName = "missing.mp4",
+            mimeType = "video/mp4", sizeBytes = 1024L, durationMs = 3000L, width = 1080, height = 1920,
+            rotationDegrees = 0, addedAt = 1000L
+        )
+        mediaRepo.addAsset(asset)
+        availabilityChecker.availabilityMap["content://media/missing"] = false
+
+        val vm = EditorViewModel("p1", projectRepo, mediaRepo, importer, availabilityChecker)
+        val collectJob = launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        val assets = vm.uiState.value.assets
         assertEquals(1, assets.size)
-        assertEquals("valid.mp4", assets[0].displayName)
-        assertEquals(2, importResult.failedCount)
+        assertEquals("a_unavail", assets[0].id)
+        assertEquals(Availability.Unavailable, assets[0].availability)
+
+        collectJob.cancel()
     }
 
     @Test
-    fun availabilityChecking_availableUri_setsFlagTrue() = runBlocking {
+    fun editorViewModel_autoSelection_neverSelectsUnavailableUnlessAllUnavailable() = runTest(testDispatcher) {
+        projectRepo.setProject(Project(id = "p1", name = "Test", createdAt = 1000L, updatedAt = 1000L, aspectRatio = "9:16"))
+        val assetUnavail = MediaAsset(
+            id = "a1_unavail", projectId = "p1", sourceUri = "content://media/unavail", displayName = "unavail.mp4",
+            mimeType = "video/mp4", sizeBytes = 1024L, durationMs = 3000L, width = 1080, height = 1920,
+            rotationDegrees = 0, addedAt = 1000L
+        )
+        val assetAvail = MediaAsset(
+            id = "a2_avail", projectId = "p1", sourceUri = "content://media/avail", displayName = "avail.mp4",
+            mimeType = "video/mp4", sizeBytes = 1024L, durationMs = 3000L, width = 1080, height = 1920,
+            rotationDegrees = 0, addedAt = 2000L
+        )
+        mediaRepo.addAsset(assetUnavail)
+        mediaRepo.addAsset(assetAvail)
+
+        availabilityChecker.availabilityMap["content://media/unavail"] = false
+        availabilityChecker.availabilityMap["content://media/avail"] = true
+
+        val vm = EditorViewModel("p1", projectRepo, mediaRepo, importer, availabilityChecker)
+        val collectJob = launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        // Even though a1_unavail is first in list, auto-selection selects a2_avail!
+        assertEquals("a2_avail", vm.uiState.value.selectedAssetId)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun editorViewModel_autoSelection_selectsFirstIfAllUnavailable() = runTest(testDispatcher) {
+        projectRepo.setProject(Project(id = "p1", name = "Test", createdAt = 1000L, updatedAt = 1000L, aspectRatio = "9:16"))
+        val asset1 = MediaAsset(
+            id = "a1_unavail", projectId = "p1", sourceUri = "content://media/unavail1", displayName = "unavail1.mp4",
+            mimeType = "video/mp4", sizeBytes = 1024L, durationMs = 3000L, width = 1080, height = 1920,
+            rotationDegrees = 0, addedAt = 1000L
+        )
+        val asset2 = MediaAsset(
+            id = "a2_unavail", projectId = "p1", sourceUri = "content://media/unavail2", displayName = "unavail2.mp4",
+            mimeType = "video/mp4", sizeBytes = 1024L, durationMs = 3000L, width = 1080, height = 1920,
+            rotationDegrees = 0, addedAt = 2000L
+        )
+        mediaRepo.addAsset(asset1)
+        mediaRepo.addAsset(asset2)
+
+        availabilityChecker.availabilityMap["content://media/unavail1"] = false
+        availabilityChecker.availabilityMap["content://media/unavail2"] = false
+
+        val vm = EditorViewModel("p1", projectRepo, mediaRepo, importer, availabilityChecker)
+        val collectJob = launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        // When all unavailable, falls back to first
+        assertEquals("a1_unavail", vm.uiState.value.selectedAssetId)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun editorViewModel_unknownToUnavailableTransition() = runTest(testDispatcher) {
+        projectRepo.setProject(Project(id = "p1", name = "Test", createdAt = 1000L, updatedAt = 1000L, aspectRatio = "9:16"))
         val asset = MediaAsset(
-            id = "a1",
-            projectId = "p1",
-            sourceUri = "content://available/1",
-            displayName = "test.mp4",
-            mimeType = "video/mp4",
-            sizeBytes = 1024L,
-            durationMs = 3000L,
-            width = 1080,
-            height = 1920,
-            rotationDegrees = 0,
-            addedAt = 1000L,
-            isAvailable = false // Initially false
+            id = "a1", projectId = "p1", sourceUri = "content://media/target", displayName = "test.mp4",
+            mimeType = "video/mp4", sizeBytes = 1024L, durationMs = 3000L, width = 1080, height = 1920,
+            rotationDegrees = 0, addedAt = 1000L, availability = Availability.Unknown
         )
         mediaRepo.addAsset(asset)
+        availabilityChecker.availabilityMap["content://media/target"] = false
 
-        // Availability check resolves to true
-        mediaRepo.setAssetAvailability("a1", true)
+        val vm = EditorViewModel("p1", projectRepo, mediaRepo, importer, availabilityChecker)
+        val collectJob = launch { vm.uiState.collect {} }
 
-        val retrieved = mediaRepo.getAssetDirect("a1")
-        assertTrue(retrieved?.isAvailable == true)
-    }
+        // Initial state before availability check completes has asset with Availability.Unknown
+        val initialAsset = vm.uiState.value.assets.firstOrNull()
+        if (initialAsset != null) {
+            assertEquals(Availability.Unknown, initialAsset.availability)
+        }
 
-    @Test
-    fun availabilityChecking_unresolvableUri_setsFlagFalse() = runBlocking {
-        val asset = MediaAsset(
-            id = "a2",
-            projectId = "p1",
-            sourceUri = "content://deleted/file",
-            displayName = "missing.mp4",
-            mimeType = "video/mp4",
-            sizeBytes = 1024L,
-            durationMs = 3000L,
-            width = 1080,
-            height = 1920,
-            rotationDegrees = 0,
-            addedAt = 1000L,
-            isAvailable = true // Initially true
-        )
-        mediaRepo.addAsset(asset)
+        advanceUntilIdle()
 
-        // Availability check fails to open URI -> sets to false
-        mediaRepo.setAssetAvailability("a2", false)
+        // After checkAssetsAvailability finishes, asset transitions to Availability.Unavailable
+        val checkedAsset = vm.uiState.value.assets.first()
+        assertEquals(Availability.Unavailable, checkedAsset.availability)
 
-        val retrieved = mediaRepo.getAssetDirect("a2")
-        assertFalse(retrieved?.isAvailable == true)
-    }
-
-    @Test
-    fun availabilityChecking_unavailableAssetRemainsInRepositoryAndTray() = runBlocking {
-        val unavailableAsset = MediaAsset(
-            id = "a-unavail",
-            projectId = "p1",
-            sourceUri = "content://unavail/file",
-            displayName = "unavail.mp4",
-            mimeType = "video/mp4",
-            sizeBytes = 1024L,
-            durationMs = 3000L,
-            width = 1080,
-            height = 1920,
-            rotationDegrees = 0,
-            addedAt = 1000L,
-            isAvailable = false
-        )
-        mediaRepo.addAsset(unavailableAsset)
-
-        // Remains in repository
-        val stored = mediaRepo.getAssetDirect("a-unavail")
-        assertEquals("a-unavail", stored?.id)
-        assertFalse(stored!!.isAvailable)
-
-        // Remains in project assets query (which populates tray)
-        val trayAssets = mediaRepo.getAssets("p1").first()
-        assertEquals(1, trayAssets.size)
-        assertEquals("a-unavail", trayAssets[0].id)
-        assertFalse(trayAssets[0].isAvailable)
+        collectJob.cancel()
     }
 }
