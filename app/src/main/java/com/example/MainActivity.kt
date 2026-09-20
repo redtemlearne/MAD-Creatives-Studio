@@ -9,8 +9,9 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.state.ProjectSessionManager
+import androidx.compose.ui.platform.LocalContext
+import com.example.di.AppContainer
+import com.example.di.DefaultAppContainer
 import com.example.ui.navigation.AppNavigation
 import com.example.ui.theme.MADCreativesTheme
 import com.example.util.LocalWindowWidthSizeClass
@@ -20,21 +21,25 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val appContainer = (application as? MADCreativesApp)?.container
+            ?: DefaultAppContainer(applicationContext)
+
         setContent {
-            MADCreativesStudioApp()
+            MADCreativesStudioApp(appContainer = appContainer)
         }
     }
 }
 
 @Composable
 fun MADCreativesStudioApp(
-    sessionManager: ProjectSessionManager = viewModel(),
+    appContainer: AppContainer = (LocalContext.current.applicationContext as? MADCreativesApp)?.container
+        ?: DefaultAppContainer(LocalContext.current.applicationContext),
     windowWidthSizeClass: WindowWidthSizeClass = rememberWindowWidthSizeClass()
 ) {
     CompositionLocalProvider(LocalWindowWidthSizeClass provides windowWidthSizeClass) {
         MADCreativesTheme {
             AppNavigation(
-                sessionManager = sessionManager,
+                appContainer = appContainer,
                 modifier = Modifier.fillMaxSize()
             )
         }

@@ -20,9 +20,11 @@ class GreetingScreenshotTest {
 
   @Test
   fun studio_screenshot() {
+    val container = com.example.fakes.TestAppContainer()
     composeTestRule.setContent {
-      MADCreativesStudioApp()
+      MADCreativesStudioApp(appContainer = container)
     }
+    composeTestRule.waitForIdle()
 
     composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/greeting.png")
   }

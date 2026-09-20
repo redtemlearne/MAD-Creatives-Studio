@@ -1,8 +1,6 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,8 +13,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -41,8 +40,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.StudioAccent
-import com.example.ui.theme.StudioAccentMuted
 import com.example.ui.theme.StudioBorder
+import com.example.ui.theme.StudioDestructive
 import com.example.ui.theme.StudioRadius
 import com.example.ui.theme.StudioSpacing
 import com.example.ui.theme.StudioSurfaceElevated
@@ -294,95 +293,6 @@ fun RenameProjectDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Phase1NoticeBottomSheet(
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = StudioSurfaceElevated,
-        contentColor = StudioTextPrimary,
-        shape = RoundedCornerShape(topStart = StudioRadius.lg, topEnd = StudioRadius.lg),
-        dragHandle = {
-            BottomSheetDefaults.DragHandle(color = StudioBorder)
-        },
-        modifier = Modifier.testTag("phase1_notice_sheet")
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = StudioSpacing.xl)
-                .padding(bottom = StudioSpacing.xxl)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(StudioSpacing.md)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(StudioRadius.sm))
-                        .background(StudioAccentMuted),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Movie,
-                        contentDescription = null,
-                        tint = StudioAccent,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                Text(
-                    text = "Phase 1 Foundation",
-                    style = StudioTypography.headlineSmall,
-                    color = StudioTextPrimary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(StudioSpacing.md))
-
-            Text(
-                text = "Media import is coming in Phase 1.",
-                style = StudioTypography.bodyLarge,
-                color = StudioTextSecondary
-            )
-
-            Spacer(modifier = Modifier.height(StudioSpacing.xs))
-
-            Text(
-                text = "MAD Creatives Studio is currently in Phase 0 (UI/UX Foundation & Application Shell). The media foundation and asset ingestion engine will be unlocked in Phase 1.",
-                style = StudioTypography.bodyMedium,
-                color = StudioTextMuted
-            )
-
-            Spacer(modifier = Modifier.height(StudioSpacing.xl))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                StudioPrimaryButton(
-                    text = "Close",
-                    onClick = onDismiss,
-                    modifier = Modifier.testTag("close_phase1_dialog_button")
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun Phase1NoticeDialog(
-    onDismiss: () -> Unit
-) {
-    Phase1NoticeBottomSheet(onDismiss = onDismiss)
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 fun EditorMoreBottomSheet(
     onDismiss: () -> Unit,
     onRenameClick: () -> Unit
@@ -436,6 +346,221 @@ fun EditorMoreBottomSheet(
                         color = StudioTextPrimary
                     )
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RemoveMediaBottomSheet(
+    assetName: String,
+    onDismiss: () -> Unit,
+    onRemoveConfirm: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = StudioSurfaceElevated,
+        contentColor = StudioTextPrimary,
+        shape = RoundedCornerShape(topStart = StudioRadius.lg, topEnd = StudioRadius.lg),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(color = StudioBorder)
+        },
+        modifier = Modifier.testTag("remove_media_sheet")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = StudioSpacing.md)
+                .padding(bottom = StudioSpacing.xxl)
+        ) {
+            Text(
+                text = assetName,
+                style = StudioTypography.titleMedium,
+                color = StudioTextSecondary,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = StudioSpacing.md, vertical = StudioSpacing.xs)
+            )
+
+            Spacer(modifier = Modifier.height(StudioSpacing.xs))
+
+            Surface(
+                onClick = {
+                    onDismiss()
+                    onRemoveConfirm()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(StudioRadius.md))
+                    .testTag("remove_from_project_action"),
+                color = StudioSurfaceElevated
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = StudioSpacing.md, vertical = StudioSpacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(StudioSpacing.md)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = null,
+                        tint = StudioDestructive,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "Remove from project",
+                        style = StudioTypography.titleMedium,
+                        color = StudioDestructive
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProjectOptionsBottomSheet(
+    projectName: String,
+    onDismiss: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = StudioSurfaceElevated,
+        contentColor = StudioTextPrimary,
+        shape = RoundedCornerShape(topStart = StudioRadius.lg, topEnd = StudioRadius.lg),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(color = StudioBorder)
+        },
+        modifier = Modifier.testTag("project_options_sheet")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = StudioSpacing.md)
+                .padding(bottom = StudioSpacing.xxl)
+        ) {
+            Text(
+                text = projectName,
+                style = StudioTypography.titleMedium,
+                color = StudioTextSecondary,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = StudioSpacing.md, vertical = StudioSpacing.xs)
+            )
+
+            Spacer(modifier = Modifier.height(StudioSpacing.xs))
+
+            Surface(
+                onClick = {
+                    onDismiss()
+                    onDeleteClick()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(StudioRadius.md))
+                    .testTag("delete_project_action"),
+                color = StudioSurfaceElevated
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = StudioSpacing.md, vertical = StudioSpacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(StudioSpacing.md)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = StudioDestructive,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "Delete project",
+                        style = StudioTypography.titleMedium,
+                        color = StudioDestructive
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConfirmDeleteProjectBottomSheet(
+    projectName: String,
+    onDismiss: () -> Unit,
+    onConfirmDelete: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = StudioSurfaceElevated,
+        contentColor = StudioTextPrimary,
+        shape = RoundedCornerShape(topStart = StudioRadius.lg, topEnd = StudioRadius.lg),
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(color = StudioBorder)
+        },
+        modifier = Modifier.testTag("confirm_delete_sheet")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = StudioSpacing.xl)
+                .padding(bottom = StudioSpacing.xxl)
+        ) {
+            Text(
+                text = "Delete \"$projectName\"?",
+                style = StudioTypography.headlineSmall,
+                color = StudioTextPrimary
+            )
+
+            Spacer(modifier = Modifier.height(StudioSpacing.xs))
+
+            Text(
+                text = "This will permanently delete the project and remove its media links. Source video files will not be deleted.",
+                style = StudioTypography.bodyMedium,
+                color = StudioTextMuted
+            )
+
+            Spacer(modifier = Modifier.height(StudioSpacing.xl))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("cancel_delete_button")
+                ) {
+                    Text(
+                        text = "Cancel",
+                        color = StudioTextSecondary,
+                        style = StudioTypography.labelLarge
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(StudioSpacing.sm))
+
+                StudioPrimaryButton(
+                    text = "Delete Project",
+                    onClick = {
+                        onDismiss()
+                        onConfirmDelete()
+                    },
+                    modifier = Modifier.testTag("confirm_delete_button")
+                )
             }
         }
     }

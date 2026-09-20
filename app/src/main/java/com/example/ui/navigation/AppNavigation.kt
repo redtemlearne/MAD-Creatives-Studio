@@ -6,19 +6,23 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.example.state.ProjectSessionManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.di.AppContainer
 import com.example.ui.editor.EditorScreen
+import com.example.ui.editor.EditorViewModel
 import com.example.ui.home.HomeScreen
+import com.example.ui.home.HomeViewModel
 
 @Composable
 fun AppNavigation(
-    sessionManager: ProjectSessionManager,
+    appContainer: AppContainer,
     modifier: Modifier = Modifier
 ) {
     var currentScreenRoute by rememberSaveable { mutableStateOf("home") }
@@ -29,8 +33,10 @@ fun AppNavigation(
         Screen.Home
     }
 
-    val projects by sessionManager.projects.collectAsState()
-    val activeProject by sessionManager.activeProject.collectAsState()
+    val homeViewModel: HomeViewModel = viewModel(
+        factory = HomeViewModel.provideFactory(appContainer.projectRepository)
+    )
+    val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
 
     AnimatedContent(
         targetState = currentScreen,
@@ -43,51 +49,43 @@ fun AppNavigation(
         when (screen) {
             is Screen.Home -> {
                 HomeScreen(
-                    projects = projects,
+                    projects = homeUiState.projects,
                     onOpenProject = { projectId ->
-                        sessionManager.openProject(projectId)
                         currentScreenRoute = "editor:$projectId"
                     },
                     onCreateProject = { projectName ->
-                        val newProject = sessionManager.createProject(projectName)
-                        currentScreenRoute = "editor:${newProject.id}"
+                        homeViewModel.createProject(projectName) { newProjectId ->
+                            currentScreenRoute = "editor:$newProjectId"
+                        }
+                    },
+                    onDeleteProject = { projectId ->
+                        homeViewModel.deleteProject(projectId)
                     }
                 )
             }
 
             is Screen.Editor -> {
                 BackHandler {
-                    sessionManager.closeProject()
                     currentScreenRoute = "home"
                 }
 
-                // If active project is somehow null, fallback to Home
-                val projectToDisplay = activeProject ?: sessionManager.getProject(screen.projectId)
+                val context = LocalContext.current
+                val editorViewModel: EditorViewModel = viewModel(
+                    key = "editor_${screen.projectId}",
+                    factory = EditorViewModel.provideFactory(
+                        projectId = screen.projectId,
+                        projectRepository = appContainer.projectRepository,
+                        mediaRepository = appContainer.mediaRepository,
+                        context = context.applicationContext
+                    )
+                )
 
-                if (projectToDisplay != null) {
-                    EditorScreen(
-                        project = projectToDisplay,
-                        onBackClick = {
-                            sessionManager.closeProject()
-                            currentScreenRoute = "home"
-                        },
-                        onRenameProject = { newName ->
-                            sessionManager.renameProject(projectToDisplay.id, newName)
-                        }
-                    )
-                } else {
-                    HomeScreen(
-                        projects = projects,
-                        onOpenProject = { projectId ->
-                            sessionManager.openProject(projectId)
-                            currentScreenRoute = "editor:$projectId"
-                        },
-                        onCreateProject = { projectName ->
-                            val newProject = sessionManager.createProject(projectName)
-                            currentScreenRoute = "editor:${newProject.id}"
-                        }
-                    )
-                }
+                EditorScreen(
+                    viewModel = editorViewModel,
+                    onBackClick = {
+                        currentScreenRoute = "home"
+                    }
+                )
             }
         }
     }

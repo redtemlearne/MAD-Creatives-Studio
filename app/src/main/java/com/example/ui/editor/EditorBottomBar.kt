@@ -51,7 +51,7 @@ fun EditorBottomBar(
         // More action
         StudioIconButton(
             icon = Icons.Default.MoreHoriz,
-            contentDescription = "More tools (Phase 0)",
+            contentDescription = "More tools",
             onClick = onMoreClick,
             tint = StudioTextSecondary,
             modifier = Modifier.testTag("bottom_more_button")

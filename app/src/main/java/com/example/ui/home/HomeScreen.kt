@@ -37,7 +37,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.model.Project
+import com.example.ui.components.ConfirmDeleteProjectBottomSheet
 import com.example.ui.components.NewProjectBottomSheet
+import com.example.ui.components.ProjectOptionsBottomSheet
 import com.example.ui.components.StudioIconButton
 import com.example.ui.theme.StudioAccent
 import com.example.ui.theme.StudioBackground
@@ -56,9 +58,12 @@ fun HomeScreen(
     projects: List<Project>,
     onOpenProject: (projectId: String) -> Unit,
     onCreateProject: (projectName: String) -> Unit,
+    onDeleteProject: (projectId: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showNewProjectSheet by remember { mutableStateOf(false) }
+    var projectForOptions by remember { mutableStateOf<Project?>(null) }
+    var projectToConfirmDelete by remember { mutableStateOf<Project?>(null) }
     val isWideLayout = LocalWindowWidthSizeClass.current.isWide()
 
     if (showNewProjectSheet) {
@@ -67,6 +72,28 @@ fun HomeScreen(
             onCreateProject = { name ->
                 showNewProjectSheet = false
                 onCreateProject(name)
+            }
+        )
+    }
+
+    projectForOptions?.let { project ->
+        ProjectOptionsBottomSheet(
+            projectName = project.name,
+            onDismiss = { projectForOptions = null },
+            onDeleteClick = {
+                projectForOptions = null
+                projectToConfirmDelete = project
+            }
+        )
+    }
+
+    projectToConfirmDelete?.let { project ->
+        ConfirmDeleteProjectBottomSheet(
+            projectName = project.name,
+            onDismiss = { projectToConfirmDelete = null },
+            onConfirmDelete = {
+                onDeleteProject(project.id)
+                projectToConfirmDelete = null
             }
         )
     }
@@ -126,7 +153,7 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(StudioSpacing.md)
                 ) {
                     item {
-                        // Section Header with Title (Single CTA principle: FAB handles New Project when non-empty)
+                        // Section Header with Title
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -165,7 +192,8 @@ fun HomeScreen(
                         ) { project ->
                             ProjectCard(
                                 project = project,
-                                onClick = { onOpenProject(project.id) }
+                                onClick = { onOpenProject(project.id) },
+                                onLongClick = { projectForOptions = project }
                             )
                         }
                     }
@@ -212,11 +240,11 @@ private fun HomeTopBar(
             )
         }
 
-        // Settings icon button (static placeholder for Phase 0)
+        // Settings icon button
         StudioIconButton(
             icon = Icons.Default.Settings,
             contentDescription = "Settings",
-            onClick = { /* Static placeholder for future settings */ },
+            onClick = { /* Settings action */ },
             tint = StudioTextSecondary,
             modifier = Modifier.testTag("home_settings_button")
         )
