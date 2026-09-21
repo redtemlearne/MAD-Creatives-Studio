@@ -57,49 +57,57 @@ class MediaImporter(
                 return@forEachIndexed
             }
 
-            val metadata: VideoMetadata? = try {
-                videoMetadataReader.read(uri)
-            } catch (_: Exception) {
-                null
-            }
+            var assetId: String? = null
+            var thumbnailGenerated = false
 
-            if (metadata == null) {
-                failedCount++
-                if (mediaRepository.countUriUsage(uri) == 0) {
-                    uriGrantManager.release(uri)
+            try {
+                val metadata: VideoMetadata? = videoMetadataReader.read(uri)
+
+                if (metadata == null || metadata.durationMs <= 0L) {
+                    failedCount++
+                    if (mediaRepository.countUriUsage(uri) == 0) {
+                        uriGrantManager.release(uri)
+                    }
+                    return@forEachIndexed
                 }
-                return@forEachIndexed
-            }
 
-            if (metadata.durationMs <= 0L) {
+                val id = UUID.randomUUID().toString()
+                assetId = id
+                thumbnailGenerated = thumbnailGenerator.generate(id, uri)
+
+                val asset = MediaAsset(
+                    id = id,
+                    projectId = projectId,
+                    sourceUri = uri,
+                    displayName = metadata.displayName,
+                    mimeType = metadata.mimeType,
+                    sizeBytes = metadata.sizeBytes,
+                    durationMs = metadata.durationMs,
+                    width = metadata.width,
+                    height = metadata.height,
+                    rotationDegrees = metadata.rotationDegrees,
+                    addedAt = System.currentTimeMillis(),
+                    availability = Availability.Available
+                )
+
+                mediaRepository.addAsset(asset)
+                importedCount++
+                projectRepository?.updateProjectTimestamp(projectId, System.currentTimeMillis())
+            } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
+                throw ce
+            } catch (e: Exception) {
                 failedCount++
-                if (mediaRepository.countUriUsage(uri) == 0) {
-                    uriGrantManager.release(uri)
+                if (assetId != null && thumbnailGenerated) {
+                    thumbnailGenerator.deleteThumbnail(assetId)
                 }
-                return@forEachIndexed
+                try {
+                    if (mediaRepository.countUriUsage(uri) == 0) {
+                        uriGrantManager.release(uri)
+                    }
+                } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
+                    throw ce
+                } catch (_: Exception) {}
             }
-
-            val assetId = UUID.randomUUID().toString()
-            thumbnailGenerator.generate(assetId, uri)
-
-            val asset = MediaAsset(
-                id = assetId,
-                projectId = projectId,
-                sourceUri = uri,
-                displayName = metadata.displayName,
-                mimeType = metadata.mimeType,
-                sizeBytes = metadata.sizeBytes,
-                durationMs = metadata.durationMs,
-                width = metadata.width,
-                height = metadata.height,
-                rotationDegrees = metadata.rotationDegrees,
-                addedAt = System.currentTimeMillis(),
-                availability = Availability.Available
-            )
-
-            mediaRepository.addAsset(asset)
-            importedCount++
-            projectRepository?.updateProjectTimestamp(projectId, System.currentTimeMillis())
         }
 
         ImportResult(

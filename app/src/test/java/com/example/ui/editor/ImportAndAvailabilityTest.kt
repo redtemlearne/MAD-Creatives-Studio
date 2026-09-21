@@ -16,6 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -245,6 +246,67 @@ class ImportAndAvailabilityTest {
         assertEquals(1, result.skippedDuplicates)
     }
 
+    @Test
+    fun importer_addAssetThrows_failedCountOneNoAssetGrantReleasedAndNoExceptionEscapes() = runTest(testDispatcher) {
+        mediaRepo.exceptionToAddAsset = RuntimeException("Database constraint violation")
+
+        val result = importer.importVideos("p1", listOf("content://media/throw_on_add"))
+
+        assertEquals(1, result.totalAttempted)
+        assertEquals(0, result.importedCount)
+        assertEquals(1, result.failedCount)
+
+        // No asset was added to repository
+        val assets = mediaRepo.getAssets("p1").first()
+        assertTrue(assets.isEmpty())
+
+        // Grant released since no other asset uses this URI
+        assertTrue(grantManager.releasedUris.contains("content://media/throw_on_add"))
+
+        // Thumbnail deleted if generated
+        assertTrue(thumbnailGenerator.deletedThumbnails.isNotEmpty())
+    }
+
+    @Test
+    fun importer_onProgress_calledWith1NToNN_andDuplicatesExcludedFromN() = runTest(testDispatcher) {
+        // Pre-populate an asset so one URI is considered a duplicate
+        mediaRepo.addAsset(
+            MediaAsset(
+                id = "existing_asset",
+                projectId = "p1",
+                sourceUri = "content://media/dup",
+                displayName = "dup.mp4",
+                mimeType = "video/mp4",
+                sizeBytes = 1024L,
+                durationMs = 5000L,
+                width = 1080,
+                height = 1920,
+                rotationDegrees = 0,
+                addedAt = 1000L
+            )
+        )
+
+        val uris = listOf(
+            "content://media/dup",  // duplicate, excluded from N
+            "content://media/v1",   // index 1 in toProcess
+            "content://media/v2",   // index 2 in toProcess
+            "content://media/v3"    // index 3 in toProcess
+        )
+
+        val progressCalls = mutableListOf<Pair<Int, Int>>()
+        val result = importer.importVideos("p1", uris) { current, total ->
+            progressCalls.add(current to total)
+        }
+
+        assertEquals(3, result.totalAttempted)
+        assertEquals(3, result.importedCount)
+        assertEquals(1, result.skippedDuplicates)
+
+        // N should be 3 (duplicates excluded)
+        val expectedCalls = listOf(1 to 3, 2 to 3, 3 to 3)
+        assertEquals(expectedCalls, progressCalls)
+    }
+
     // --- EditorViewModel Tests ---
 
     @Test
@@ -281,17 +343,33 @@ class ImportAndAvailabilityTest {
 
     @Test
     fun editorViewModel_importVideos_turnsImportProgressOnThenOff_andSetsOneSnackbarOnFailure_noneIfNothingFailed() = runTest(testDispatcher) {
+        val testImporter = MediaImporter(
+            videoMetadataReader = metadataReader,
+            uriGrantManager = grantManager,
+            thumbnailGenerator = thumbnailGenerator,
+            mediaRepository = mediaRepo,
+            projectRepository = projectRepo,
+            dispatcher = StandardTestDispatcher(testScheduler)
+        )
         projectRepo.setProject(Project(id = "p1", name = "Test", createdAt = 1000L, updatedAt = 1000L, aspectRatio = "9:16"))
-        val vm = EditorViewModel("p1", projectRepo, mediaRepo, importer, availabilityChecker)
-        val collectJob = launch { vm.uiState.collect {} }
+        val vm = EditorViewModel("p1", projectRepo, mediaRepo, testImporter, availabilityChecker)
+
+        val observedProgress = mutableListOf<ImportProgress?>()
+        val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.uiState.collect { state ->
+                observedProgress.add(state.importProgress)
+            }
+        }
         advanceUntilIdle()
 
         // Successful import -> no snackbar
         vm.importVideos(listOf("content://media/success1"))
+        // Check while running or advance until finished
         advanceUntilIdle()
 
         assertNull(vm.uiState.value.importProgress)
         assertNull(vm.uiState.value.snackbarMessage)
+        assertTrue("Expected to observe non-null importProgress at least once", observedProgress.any { it != null })
 
         // Import failure -> one snackbar message
         grantManager.persistSucceeds["content://media/fail1"] = false
@@ -410,6 +488,40 @@ class ImportAndAvailabilityTest {
         // After checkAssetsAvailability finishes, asset transitions to Availability.Unavailable
         val checkedAsset = vm.uiState.value.assets.first()
         assertEquals(Availability.Unavailable, checkedAsset.availability)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun editorViewModel_loadingAndLoadedState_whenProjectExists() = runTest(testDispatcher) {
+        projectRepo.setProject(Project(id = "p1", name = "Test", createdAt = 1000L, updatedAt = 1000L, aspectRatio = "9:16"))
+        val vm = EditorViewModel("p1", projectRepo, mediaRepo, importer, availabilityChecker)
+
+        // Initially before flow emissions or advance, isLoading is true
+        assertTrue(vm.uiState.value.isLoading)
+        assertFalse(vm.uiState.value.projectNotFound)
+
+        val collectJob = launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        // After load completes
+        assertFalse(vm.uiState.value.isLoading)
+        assertFalse(vm.uiState.value.projectNotFound)
+        assertNotNull(vm.uiState.value.project)
+        assertEquals("p1", vm.uiState.value.project?.id)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun editorViewModel_projectNotFound_setsFlagWhenProjectDoesNotExist() = runTest(testDispatcher) {
+        val vm = EditorViewModel("non_existent_id", projectRepo, mediaRepo, importer, availabilityChecker)
+        val collectJob = launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isLoading)
+        assertTrue(vm.uiState.value.projectNotFound)
+        assertNull(vm.uiState.value.project)
 
         collectJob.cancel()
     }

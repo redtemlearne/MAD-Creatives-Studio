@@ -54,11 +54,22 @@ class FakeUriGrantManager : UriGrantManager {
 
 class FakeThumbnailGenerator : ThumbnailGenerator {
     val generateCalls = mutableListOf<Pair<String, String>>()
+    val deletedThumbnails = mutableListOf<String>()
     var shouldSucceed = true
+    var generatedThumbnails = mutableSetOf<String>()
 
     override fun generate(assetId: String, uri: String): Boolean {
         generateCalls.add(assetId to uri)
+        if (shouldSucceed) {
+            generatedThumbnails.add(assetId)
+        }
         return shouldSucceed
+    }
+
+    override fun deleteThumbnail(assetId: String): Boolean {
+        deletedThumbnails.add(assetId)
+        generatedThumbnails.remove(assetId)
+        return true
     }
 }
 
@@ -123,6 +134,7 @@ class FakeProjectRepository : ProjectRepository {
 
 class FakeMediaRepository : MediaRepository {
     private val assetsMap = MutableStateFlow<Map<String, MediaAsset>>(emptyMap())
+    var exceptionToAddAsset: Exception? = null
 
     override fun getAssets(projectId: String): Flow<List<MediaAsset>> {
         return assetsMap.map { map ->
@@ -135,6 +147,7 @@ class FakeMediaRepository : MediaRepository {
     }
 
     override suspend fun addAsset(asset: MediaAsset) {
+        exceptionToAddAsset?.let { throw it }
         assetsMap.value = assetsMap.value + (asset.id to asset)
     }
 

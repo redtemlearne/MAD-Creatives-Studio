@@ -135,27 +135,30 @@ class EditorViewModel(
     fun importVideos(uris: List<String>) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
-            _importProgress.value = ImportProgress(1, uris.size)
-            val result = mediaImporter.importVideos(
-                projectId = projectId,
-                uris = uris,
-                onProgress = { current, total ->
-                    _importProgress.value = ImportProgress(current, total)
-                }
-            )
-            _importProgress.value = null
+            try {
+                _importProgress.value = ImportProgress(1, uris.size)
+                val result = mediaImporter.importVideos(
+                    projectId = projectId,
+                    uris = uris,
+                    onProgress = { current, total ->
+                        _importProgress.value = ImportProgress(current, total)
+                    }
+                )
 
-            // Report failures in ONE Snackbar ("2 of 3 videos couldn't be imported")
-            if (result.failedCount > 0) {
-                val message = if (result.totalAttempted == 1) {
-                    "1 video couldn't be imported"
-                } else {
-                    "${result.failedCount} of ${result.totalAttempted} videos couldn't be imported"
+                // Report failures in ONE Snackbar ("2 of 3 videos couldn't be imported")
+                if (result.failedCount > 0) {
+                    val message = if (result.totalAttempted == 1) {
+                        "1 video couldn't be imported"
+                    } else {
+                        "${result.failedCount} of ${result.totalAttempted} videos couldn't be imported"
+                    }
+                    _snackbarMessage.value = message
                 }
-                _snackbarMessage.value = message
+
+                checkAssetsAvailability()
+            } finally {
+                _importProgress.value = null
             }
-
-            checkAssetsAvailability()
         }
     }
 

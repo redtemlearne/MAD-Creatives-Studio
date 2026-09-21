@@ -22,4 +22,13 @@ class AndroidThumbnailGenerator(
             } catch (_: Exception) {}
         }
     }
+
+    override fun deleteThumbnail(assetId: String): Boolean {
+        return try {
+            val thumbFile = ThumbnailManager.getThumbnailFile(context, assetId)
+            if (thumbFile.exists()) thumbFile.delete() else true
+        } catch (_: Exception) {
+            false
+        }
+    }
 }
